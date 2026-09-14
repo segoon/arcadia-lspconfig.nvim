@@ -1,0 +1,5 @@
+- restructure :checkhealth output
+- more user-friendly readme
+- more user-friendly vimdoc
+- gopls support
+- ya.make support
