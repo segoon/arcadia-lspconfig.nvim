@@ -1,14 +1,15 @@
 describe('setup', function()
-  it('validates options, supports disabling clangd, and rejects repetition', function()
+  it('validates options, supports disabling built-in servers, and rejects repetition', function()
     local plugin = require 'arcadia-lspconfig'
 
     assert.has_error(function()
       plugin.setup { jobs = { cancel_on_buf_exit = true } }
     end, 'arcadia-lspconfig: unknown jobs option: cancel_on_buf_exit')
 
-    plugin.setup { servers = { clangd = false }, log = { level = 'off' } }
+    plugin.setup { servers = { clangd = false, pyright = false }, log = { level = 'off' } }
     assert.is_true(plugin._state().configured)
     assert.is_nil(plugin._state().workflows.clangd)
+    assert.is_nil(plugin._state().workflows.pyright)
     assert.are.equal(2, vim.fn.exists ':LspRefreshArcadia')
     assert.has_error(function()
       plugin.setup()

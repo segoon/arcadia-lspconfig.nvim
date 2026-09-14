@@ -54,6 +54,27 @@ def make():
     return 0
 
 
+def ide_vscode():
+    output_arg = next(arg for arg in sys.argv if arg.startswith("-P="))
+    output = pathlib.Path(output_arg.split("=", 1)[1])
+    output.mkdir(parents=True, exist_ok=True)
+    append_log("ide:" + os.getcwd() + ":" + " ".join(sys.argv[2:]))
+    if pathlib.Path(".fake_ya_ide_fail").exists():
+        print("requested ide failure", file=sys.stderr)
+        return 1
+    links = output / ".links"
+    links.mkdir(exist_ok=True)
+    workspace = {
+        "settings": {
+            "python.analysis.extraPaths": [os.getcwd(), str(links)],
+        }
+    }
+    (output / "arcadia-pyright.code-workspace").write_text(
+        json.dumps(workspace), encoding="utf-8"
+    )
+    return 0
+
+
 def send(message):
     payload = json.dumps(message, separators=(",", ":")).encode()
     sys.stdout.buffer.write(f"Content-Length: {len(payload)}\r\n\r\n".encode() + payload)
@@ -74,8 +95,8 @@ def read_message():
     return json.loads(sys.stdin.buffer.read(length)) if length is not None else None
 
 
-def run_clangd():
-    append_log("clangd:" + os.getcwd())
+def run_lsp(name):
+    append_log(name + ":" + os.getcwd())
     while True:
         message = read_message()
         if message is None:
@@ -93,8 +114,12 @@ if sys.argv[1:3] == ["dump", "compile-commands"]:
     sys.exit(dump_compile_commands())
 if sys.argv[1:2] == ["make"]:
     sys.exit(make())
+if sys.argv[1:3] == ["ide", "vscode"]:
+    sys.exit(ide_vscode())
 if sys.argv[1:3] == ["tool", "clangd"]:
-    sys.exit(run_clangd())
+    sys.exit(run_lsp("clangd"))
+if sys.argv[1:2] == ["fake-pyright"]:
+    sys.exit(run_lsp("pyright"))
 print("unexpected fake ya arguments", sys.argv[1:], file=sys.stderr)
 sys.exit(2)
 

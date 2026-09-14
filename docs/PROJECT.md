@@ -12,8 +12,8 @@ The target language set is:
 - `gopls` for Go
 - (probably something else soon)
 
-The first implementation milestone ships the core and `clangd`. The other
-server modules remain planned work.
+The implemented built-in workflows are `clangd` and `pyright`. Other server
+modules remain planned work.
 
 Each server is implemented by a separate Lua submodule. A server module owns its
 complete Arcadia-specific workflow, including file relevance checks,
@@ -175,8 +175,9 @@ A module owns:
 - Cleanup of partial generated artifacts.
 - Server-specific failures and recovery.
 
-The `pyright` and `gopls` Arcadia workflows remain intentionally undefined
-until their modules are implemented.
+The `gopls` Arcadia workflow remains intentionally undefined until its module is
+implemented. Pyright generates isolated VS Code project data, extracts import paths,
+and follows the same cached-start/background-refresh lifecycle as clangd.
 
 ### 8.2 Core services
 
@@ -388,6 +389,7 @@ The initial option shape is:
 require("arcadia-lspconfig").setup({
   servers = {
     clangd = {},
+    pyright = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -399,7 +401,7 @@ require("arcadia-lspconfig").setup({
 })
 ```
 
-The implemented server is present by default. Setting it to `false` disables
+Implemented servers are present by default. Setting it to `false` disables
 only this plugin's integration for that server.
 
 ## 13. Status and events
@@ -580,8 +582,8 @@ production language servers.
 - Session-start background invalidation may temporarily use existing artifacts;
   each module decides when those artifacts are sufficiently valid to start or
   restart its server.
-- Python, Go, and future server-specific Arcadia commands, settings, and
-  relevance rules remain to be specified in their respective modules.
+- Go and future server-specific Arcadia commands, settings, and relevance rules
+  remain to be specified in their respective modules.
 
 ## 19. Initial implementation priorities
 
@@ -594,5 +596,5 @@ production language servers.
    reattachment.
 6. Implement status, statusline, events, notifications, logging, commands, and
    health checks.
-7. Add the three server module shells.
+7. Add future server module shells.
 8. Define and implement each server-specific Arcadia workflow independently.

@@ -2,8 +2,8 @@
 
 Arcadia-aware extensions for Neovim's native LSP configuration.
 
-The first release supports C and C++ through `clangd`. For every applicable
-Arcadia `ya.make` root it:
+The plugin supports C and C++ through `clangd` and Python through `pyright`.
+For every applicable Arcadia `ya.make` root, clangd:
 
 1. immediately starts `<arcadia-root>/ya tool clangd` when a valid cached
    `compile_commands.json` exists;
@@ -15,8 +15,10 @@ Arcadia `ya.make` root it:
 Outside Arcadia, or when no `ya.make` exists, the plugin leaves the normal
 `nvim-lspconfig` clangd behavior unchanged.
 
-Python, Go, and additional tier0 language modules are planned but are not part
-of the current release.
+For Python roots, it honors a project `pyrightconfig.json` when present.
+Otherwise it runs `ya ide vscode --py3`, caches generated import paths outside
+Arcadia, and starts or reloads Pyright after successful preparation. Go and other
+language modules remain planned.
 
 ## Requirements
 
@@ -39,12 +41,13 @@ With lazy.nvim:
   config = function()
     require('arcadia-lspconfig').setup()
     vim.lsp.enable('clangd')
+    vim.lsp.enable('pyright')
   end,
 }
 ```
 
-Apply ordinary clangd customizations before setup. The user remains responsible
-for enabling clangd:
+Apply ordinary clangd and Pyright customizations before setup. The user remains
+responsible for enabling each server:
 
 ```lua
 vim.lsp.config('clangd', {
@@ -53,9 +56,10 @@ vim.lsp.config('clangd', {
 
 require('arcadia-lspconfig').setup()
 vim.lsp.enable('clangd')
+vim.lsp.enable('pyright')
 ```
 
-Calling `setup()` more than once or enabling clangd before setup is unsupported.
+Calling `setup()` more than once or enabling a managed server before setup is unsupported.
 
 ## Configuration
 
@@ -65,6 +69,7 @@ Defaults:
 require('arcadia-lspconfig').setup({
   servers = {
     clangd = {},
+    pyright = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -76,8 +81,8 @@ require('arcadia-lspconfig').setup({
 })
 ```
 
-Set `servers.clangd = false` to leave clangd entirely unmanaged by this plugin.
-The clangd table has no options in the current release.
+Set `servers.clangd = false` or `servers.pyright = false` to leave that server
+unmanaged by this plugin. The server tables have no options in the current release.
 
 `cancel_on_buff_exit` drops a buffer's interest on `BufDelete` and
 `BufWipeout`. A shared job is terminated only after its last interested buffer
@@ -99,11 +104,18 @@ The Arcadia root is the nearest ancestor containing `.arc/HEAD`. The LSP root
 is the nearest ancestor containing `ya.make`, and its search stops at the
 Arcadia root. Symlinks are not resolved.
 
-Each full LSP root gets an isolated cache:
+Each full LSP root gets isolated caches:
 
 ```text
 stdpath('data')/arcadia-lspconfig/<sha256-of-lsp-root>/clangd/compile_commands.json
 ```
+
+Pyright stores a validated manifest and generated `.links` tree below the
+sibling `pyright/` directory. Existing `{lsp-root}/pyrightconfig.json` files take
+precedence. Without one, cached paths start Pyright immediately while
+`ya ide vscode --py3 --no-pyright-config` refreshes them in the background.
+Without a valid cache, Pyright waits for generation; failures preserve the last
+working cache and client.
 
 The preparation commands run concurrently:
 
@@ -200,12 +212,14 @@ Its event data is deliberately unspecified; consumers should call `status()` or
 
 ## Commands
 
-- `:LspRefreshArcadia` reruns both preparation jobs for the current buffer's root.
+- `:LspRefreshArcadia` reruns preparation for the current buffer.s applicable
+  server.
 - `:ArcadiaLspStatus` displays structured status.
-- `:ArcadiaLspRestart` restarts the current root's clangd only when a valid
-  compilation database is available.
+- `:ArcadiaLspRestart` restarts the current root's applicable clangd or
+  Pyright client when its required configuration is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
-  cache state, and the current workflow for the file from which it was invoked.
+  server-specific cache state, and the current workflow for the file from which
+  it was invoked.
 
 ## Development
 

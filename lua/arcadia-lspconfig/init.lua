@@ -1,7 +1,7 @@
 local M = {}
 
 local defaults = {
-  servers = { clangd = {} },
+  servers = { clangd = {}, pyright = {} },
   jobs = { cancel_on_buff_exit = true, timeout_ms = nil },
   log = { level = 'warn' },
 }
@@ -32,13 +32,17 @@ local function validate_options(user_options)
   vim.validate('log', user_options.log, 'table', true)
 
   local result = vim.tbl_deep_extend('force', vim.deepcopy(defaults), user_options)
-  reject_unknown(result.servers, { clangd = true }, 'server')
+  reject_unknown(result.servers, { clangd = true, pyright = true }, 'server')
   reject_unknown(result.jobs, { cancel_on_buff_exit = true, timeout_ms = true }, 'jobs')
   reject_unknown(result.log, { level = true }, 'log')
 
   if result.servers.clangd ~= false then
     vim.validate('servers.clangd', result.servers.clangd, 'table')
     reject_unknown(result.servers.clangd, {}, 'servers.clangd')
+  end
+  if result.servers.pyright ~= false then
+    vim.validate('servers.pyright', result.servers.pyright, 'table')
+    reject_unknown(result.servers.pyright, {}, 'servers.pyright')
   end
   vim.validate('jobs.cancel_on_buff_exit', result.jobs.cancel_on_buff_exit, 'boolean')
   vim.validate('jobs.timeout_ms', result.jobs.timeout_ms, 'number', true)
@@ -52,14 +56,34 @@ local function validate_options(user_options)
   return result
 end
 
-local function validate_environment()
+---@param validated_options table
+local function validate_environment(validated_options)
   local version = vim.version()
   if version.major == 0 and (version.minor < 11 or (version.minor == 11 and version.patch < 3)) then
     error('arcadia-lspconfig requires Neovim 0.11.3 or newer', 3)
   end
-  if #vim.api.nvim_get_runtime_file('lsp/clangd.lua', false) == 0 then
-    error('arcadia-lspconfig requires nvim-lspconfig on runtimepath', 3)
+  for _, server in ipairs { 'clangd', 'pyright' } do
+    if
+      validated_options.servers[server] ~= false
+      and #vim.api.nvim_get_runtime_file(('lsp/%s.lua'):format(server), false) == 0
+    then
+      error(('arcadia-lspconfig requires nvim-lspconfig lsp/%s.lua'):format(server), 3)
+    end
   end
+end
+
+---@param bufnr integer
+---@return table?
+local function workflow_for_buffer(bufnr)
+  local filetype = vim.bo[bufnr].filetype
+  for _, server in ipairs { 'clangd', 'pyright' } do
+    local workflow = workflows[server]
+    local base = require('arcadia-lspconfig.config').base(server)
+    if workflow and base and vim.tbl_contains(base.filetypes or {}, filetype) then
+      return workflow
+    end
+  end
+  return nil
 end
 
 ---@param server string
@@ -112,11 +136,15 @@ local function create_commands()
   end, { desc = 'Show Arcadia LSP status for the current buffer' })
 
   vim.api.nvim_create_user_command('ArcadiaLspRestart', function()
-    local workflow = workflows.clangd
+    local workflow = workflow_for_buffer(vim.api.nvim_get_current_buf())
     if not workflow then
-      vim.notify('clangd Arcadia integration is disabled', vim.log.levels.WARN, {
-        title = 'arcadia-lspconfig.nvim',
-      })
+      vim.notify(
+        'no enabled Arcadia LSP integration applies to the current buffer',
+        vim.log.levels.WARN,
+        {
+          title = 'arcadia-lspconfig.nvim',
+        }
+      )
       return
     end
     local ok, err = workflow.restart(0)
@@ -133,18 +161,20 @@ function M.setup(user_options)
   if configured then
     error('arcadia-lspconfig.setup() may only be called once', 2)
   end
-  validate_environment()
   options = validate_options(user_options)
+  validate_environment(options)
   configured = true
 
   require('arcadia-lspconfig.log').configure(options.log.level)
   require('arcadia-lspconfig.jobs').setup(options.jobs)
 
-  if options.servers.clangd ~= false then
+  ---@return table
+  local function make_api()
     local api = {
       root = require 'arcadia-lspconfig.root',
       paths = require 'arcadia-lspconfig.paths',
       cache = require 'arcadia-lspconfig.cache',
+      pyright_cache = require 'arcadia-lspconfig.pyright_cache',
       config = require 'arcadia-lspconfig.config',
       jobs = require 'arcadia-lspconfig.jobs',
       clients = require 'arcadia-lspconfig.clients',
@@ -153,8 +183,14 @@ function M.setup(user_options)
       log = require 'arcadia-lspconfig.log',
       options = options,
     }
-    workflows.clangd = require 'arcadia-lspconfig.servers.clangd'(api)
-    install_server('clangd', workflows.clangd)
+    return api
+  end
+
+  for _, server in ipairs { 'clangd', 'pyright' } do
+    if options.servers[server] ~= false then
+      workflows[server] = require('arcadia-lspconfig.servers.' .. server)(make_api())
+      install_server(server, workflows[server])
+    end
   end
   create_commands()
 end
@@ -180,10 +216,11 @@ end
 function M.refresh(bufnr)
   bufnr = bufnr or 0
   bufnr = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
-  if not workflows.clangd then
-    return nil, 'clangd Arcadia integration is disabled'
+  local workflow = workflow_for_buffer(bufnr)
+  if not workflow then
+    return nil, 'no enabled Arcadia LSP integration applies to the current buffer'
   end
-  return workflows.clangd.refresh(bufnr)
+  return workflow.refresh(bufnr)
 end
 
 ---@return table
