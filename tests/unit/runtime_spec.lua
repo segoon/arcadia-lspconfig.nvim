@@ -89,12 +89,13 @@ describe('injected server runtime', function()
     local original_create_command = vim.api.nvim_create_user_command
     local original_is_enabled = vim.lsp.is_enabled
     local refreshed
-    local enabled = { second = true }
-    local function definition(name)
+    local enabled = { second = true, suppressed = true }
+    local function definition(name, route_commands)
       return {
         name = name,
         default_options = {},
         allowed_options = {},
+        route_commands = route_commands,
         create = function()
           return {
             context = function(bufnr)
@@ -126,12 +127,13 @@ describe('injected server runtime', function()
     vim.lsp.is_enabled = function(name)
       return enabled[name] == true
     end
-    for _, name in ipairs { 'first', 'second' } do
+    for _, name in ipairs { 'first', 'second', 'suppressed' } do
       vim.lsp.config(name, { cmd = { 'true' }, filetypes = { 'fixture' } })
     end
     local runtime = require('arcadia-lspconfig.runtime').new {
       definition 'first',
       definition 'second',
+      definition('suppressed', false),
     }
     runtime.setup { log = { level = 'off' } }
     local bufnr = vim.api.nvim_create_buf(false, true)
@@ -148,7 +150,7 @@ describe('injected server runtime', function()
     assert.is_nil(ok)
     assert.are.equal('no enabled Arcadia LSP integration applies to the current buffer', message)
 
-    enabled = { first = true, second = true }
+    enabled = { first = true, second = true, suppressed = true }
     workflow, selected, message = runtime._workflow(bufnr)
     assert.is_nil(workflow)
     assert.is_nil(selected)

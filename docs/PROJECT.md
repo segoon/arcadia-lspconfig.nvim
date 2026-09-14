@@ -9,12 +9,14 @@ The target language set is:
 
 - `clangd` for C and C++
 - `pyright` or `basedpyright` for Python
+- suppression of `ty` inside Arcadia
 - `gopls` for Go
 - (probably something else soon)
 
-The implemented built-in workflows are `clangd`, `pyright`, and `basedpyright`.
-The two Python servers share one workflow implementation and are mutually
-exclusive. Other server modules remain planned work.
+The implemented built-in workflows are `clangd`, `pyright`, and `basedpyright`,
+plus an Arcadia-only suppression policy for `ty`. The two configured Python
+servers share one workflow implementation. Other server modules remain planned
+work.
 
 Each server is implemented by a separate Lua submodule. A server module owns its
 complete Arcadia-specific workflow, including file relevance checks,
@@ -400,6 +402,7 @@ require("arcadia-lspconfig").setup({
     clangd = {},
     pyright = {},
     basedpyright = {},
+    ty = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -416,6 +419,10 @@ only this plugin's integration for that server. Plugin integration and Neovim
 LSP activation are separate: users choose an active Python server with
 `vim.lsp.enable()`. Runtime command routing considers enabled servers and
 reports an ambiguity if multiple integrations match one buffer.
+
+The ty definition is non-routable: its root callback suppresses ty below an
+Arcadia root and delegates to the original nvim-lspconfig root logic elsewhere.
+It never participates in refresh or restart workflow selection.
 
 ## 13. Status and events
 

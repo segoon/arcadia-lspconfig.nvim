@@ -122,5 +122,7 @@ if sys.argv[1:2] == ["fake-pyright"]:
     sys.exit(run_lsp("pyright"))
 if sys.argv[1:2] == ["fake-basedpyright"]:
     sys.exit(run_lsp("basedpyright"))
+if sys.argv[1:2] == ["fake-ty"]:
+    sys.exit(run_lsp("ty"))
 print("unexpected fake ya arguments", sys.argv[1:], file=sys.stderr)
 sys.exit(2)

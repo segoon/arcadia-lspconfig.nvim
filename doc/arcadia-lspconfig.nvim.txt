@@ -16,10 +16,12 @@ INTRODUCTION                                     *arcadia-lspconfig.nvim*
 
 arcadia-lspconfig.nvim extends native Neovim LSP configurations for Arcadia
 tier0 development. The current release supports clangd, Pyright, and
-BasedPyright. Go and other language modules are planned.
+BasedPyright. It suppresses ty inside Arcadia to prevent a globally enabled ty
+server from competing with the Arcadia Python server. Go and other language
+modules are planned.
 
-The plugin configures clangd, Pyright, and BasedPyright during setup. The user
-explicitly enables the desired servers with
+The plugin configures clangd, Pyright, BasedPyright, and ty during setup. The
+user explicitly enables the desired servers with
 |vim.lsp.enable()|.
 
 ==============================================================================
@@ -52,6 +54,7 @@ Default options: >lua
       clangd = {},
       pyright = {},
       basedpyright = {},
+      ty = {},
     },
     jobs = {
       cancel_on_buff_exit = true,
@@ -84,6 +87,13 @@ servers.basedpyright ~
 If both Pyright and BasedPyright are activated for one buffer, both may attach.
 Refresh, restart, and health report that the active integration is ambiguous
 rather than selecting one silently.
+
+                                           *arcadia-lspconfig-servers-ty*
+servers.ty ~
+    By default, prevent a globally enabled ty server from starting for buffers
+    anywhere below an Arcadia ".arc/HEAD". Existing ty clients are detached
+    from matching buffers. Outside Arcadia, normal nvim-lspconfig ty behavior
+    is preserved. Set to false to leave ty entirely unmanaged by this plugin.
 
                          *arcadia-lspconfig-cancel-on-buff-exit*
 jobs.cancel_on_buff_exit ~
