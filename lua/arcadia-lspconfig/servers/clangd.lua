@@ -468,6 +468,61 @@ return function(api)
     return true
   end
 
+  ---@param context table
+  ---@return ArcadiaLspHealthEntry[]
+  function workflow.health(context)
+    local entries = {}
+    local state = state_for(context)
+    if vim.fn.executable(state.ya_path) == 1 then
+      entries[#entries + 1] = {
+        level = 'ok',
+        message = ('Arcadia ya is executable: %s'):format(state.ya_path),
+      }
+    else
+      entries[#entries + 1] = {
+        level = 'error',
+        message = ('Arcadia ya is not executable: %s'):format(state.ya_path),
+      }
+    end
+    entries[#entries + 1] = {
+      level = 'info',
+      message = ('%s data directory: %s'):format(SERVER, state.data_dir),
+    }
+    local database = database_path(state)
+    if api.cache.is_valid(database) then
+      entries[#entries + 1] = {
+        level = 'ok',
+        message = ('Valid compilation database: %s'):format(database),
+      }
+    elseif vim.uv.fs_stat(database) then
+      entries[#entries + 1] = {
+        level = 'error',
+        message = ('Invalid compilation database: %s'):format(database),
+      }
+    else
+      entries[#entries + 1] = {
+        level = 'info',
+        message = 'No cached compilation database exists yet',
+      }
+    end
+    local running = {}
+    for _, stage in ipairs { 'compile_commands', 'build' } do
+      if state.stages[stage].state == 'waiting' then
+        running[#running + 1] = stage
+      end
+    end
+    local message = ('%s preparation revision: %d'):format(SERVER, state.revision)
+    if #running > 0 then
+      message = ('%s preparation revision %d is running: %s'):format(
+        SERVER,
+        state.revision,
+        table.concat(running, ', ')
+      )
+    end
+    entries[#entries + 1] = { level = 'info', message = message }
+    return entries
+  end
+
   ---@return table<string, ArcadiaClangdState>
   function workflow._states()
     return states

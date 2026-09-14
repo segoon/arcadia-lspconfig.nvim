@@ -6,7 +6,7 @@ CONTENTS                                      *arcadia-lspconfig.nvim-contents*
 1. Introduction.......................|arcadia-lspconfig.nvim|
 2. Requirements.......................|arcadia-lspconfig-requirements|
 3. Setup..............................|arcadia-lspconfig-setup|
-4. Detection and clangd...............|arcadia-lspconfig-clangd|
+4. Detection, clangd, and Pyright...............|arcadia-lspconfig-clangd|
 5. API................................|arcadia-lspconfig-api|
 6. Commands...........................|arcadia-lspconfig-commands|
 7. Health.............................|arcadia-lspconfig-health|
@@ -15,10 +15,11 @@ CONTENTS                                      *arcadia-lspconfig.nvim-contents*
 INTRODUCTION                                     *arcadia-lspconfig.nvim*
 
 arcadia-lspconfig.nvim extends native Neovim LSP configurations for Arcadia
-tier0 development. The current release supports clangd. Python, Go, and other
-language modules are planned.
+tier0 development. The current release supports clangd and Pyright. Go and
+other language modules are planned.
 
-The plugin configures clangd during setup. The user explicitly enables it with
+The plugin configures clangd and Pyright during setup. The user explicitly
+enables each with
 |vim.lsp.enable()|.
 
 ==============================================================================
@@ -26,14 +27,15 @@ REQUIREMENTS                          *arcadia-lspconfig-requirements*
 
 - Neovim 0.11.3 or newer.
 - nvim-lspconfig on 'runtimepath'.
-- An executable {arcadia-root}/ya for Arcadia clangd.
+- An executable {arcadia-root}/ya for Arcadia preparation.
+- A configured language-server executable for each enabled server.
 
 The plugin does not install tools.
 
 ==============================================================================
 SETUP                                            *arcadia-lspconfig-setup*
 
-Apply user clangd settings first, call setup once, then enable clangd: >lua
+Apply user server settings first, call setup once, then enable the servers: >lua
 
   vim.lsp.config('clangd', {
     capabilities = my_capabilities,
@@ -41,12 +43,14 @@ Apply user clangd settings first, call setup once, then enable clangd: >lua
 
   require('arcadia-lspconfig').setup()
   vim.lsp.enable('clangd')
+  vim.lsp.enable('pyright')
 <
 Default options: >lua
 
   require('arcadia-lspconfig').setup({
     servers = {
       clangd = {},
+      pyright = {},
     },
     jobs = {
       cancel_on_buff_exit = true,
@@ -60,6 +64,11 @@ Default options: >lua
                                       *arcadia-lspconfig-servers-clangd*
 servers.clangd ~
     Set to false to disable this plugin's clangd integration. The table has no
+    configurable fields in the current release.
+
+                                      *arcadia-lspconfig-servers-pyright*
+servers.pyright ~
+    Set to false to disable this plugin's Pyright integration. The table has no
     configurable fields in the current release.
 
                          *arcadia-lspconfig-cancel-on-buff-exit*
@@ -78,10 +87,10 @@ log.level ~
     Output is appended below stdpath("state").
 
 Unknown options and invalid values are errors. Repeated setup and calling
-vim.lsp.enable("clangd") before setup are unsupported.
+vim.lsp.enable() for a managed server before setup are unsupported.
 
 ==============================================================================
-DETECTION AND CLANGD                            *arcadia-lspconfig-clangd*
+DETECTION, CLANGD, AND PYRIGHT              *arcadia-lspconfig-clangd*
 
 The Arcadia root is the nearest ancestor containing ".arc/HEAD". The LSP root
 is the nearest ancestor containing "ya.make", bounded by the Arcadia root.
@@ -122,6 +131,23 @@ installs it. If make finishes first, its reload is skipped. Failure in either
 stage does not cancel the other; existing valid clients and databases remain
 active. A failed initial dump leaves clangd stopped.
 
+                                      *arcadia-lspconfig-pyright*
+PYRIGHT ~
+
+For a Python buffer, an existing {lsp-root}/pyrightconfig.json is honored and
+no generation is performed. Otherwise the plugin runs: >
+
+  cwd: {lsp-root}
+  {arcadia-root}/ya ide vscode --py3 --no-pyright-config
+    -W=arcadia-pyright -P={revision-project-directory}
+<
+The generated VS Code workspace's python.analysis.extraPaths are validated,
+stored under the root-specific Pyright data directory, and merged into native
+Pyright settings. A valid cache starts Pyright immediately and refreshes in the
+background. Without a cache, startup waits for successful generation. Failed,
+cancelled, timed-out, and stale generations cannot replace the last working
+configuration.
+
 ==============================================================================
 API                                                *arcadia-lspconfig-api*
 
@@ -151,7 +177,7 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:LspRefreshArcadia*
 :LspRefreshArcadia
-    Rerun both preparation jobs for the current Arcadia LSP root.
+    Rerun preparation for the current buffer's applicable server.
 
                                               *:ArcadiaLspStatus*
 :ArcadiaLspStatus
@@ -159,8 +185,8 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:ArcadiaLspRestart*
 :ArcadiaLspRestart
-    Restart clangd for the current buffer's Arcadia LSP root. Refuse when no
-    valid compilation database is available.
+    Restart the applicable clangd or Pyright client for the current buffer's
+    Arcadia LSP root. Refuse when its required configuration is unavailable.
 
 ==============================================================================
 HEALTH                                            *arcadia-lspconfig-health*
@@ -170,7 +196,7 @@ Run: >
   :checkhealth arcadia-lspconfig
 <
 The check reports Neovim and nvim-lspconfig compatibility, roots for the file
-from which it was invoked, {arcadia-root}/ya, cache validity, and
-current-session workflow state.
+from which it was invoked, {arcadia-root}/ya, cache validity, server
+availability, and current-session workflow state.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

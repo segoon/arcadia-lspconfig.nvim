@@ -48,7 +48,7 @@ describe('clangd workflow', function()
           return true
         end,
       },
-      cache = require 'arcadia-lspconfig.cache',
+      cache = require 'arcadia-lspconfig.servers.clangd_cache',
       config = {
         extend = function(_, _, patch)
           patches[#patches + 1] = patch
