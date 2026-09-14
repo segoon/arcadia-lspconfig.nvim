@@ -5,8 +5,11 @@
 return function(api, server, display_name)
   local SERVER = server or 'pyright'
   local DISPLAY_NAME = display_name or 'Pyright'
-  local STAGE = SERVER .. '_config'
+  local CONFIG_STAGE = SERVER .. '_config'
 
+  ---@class ArcadiaPythonStageState
+  ---@field state string
+  ---@field message? string
   ---@class ArcadiaPythonState
   ---@field arcadia_root string
   ---@field lsp_root string
@@ -14,10 +17,11 @@ return function(api, server, display_name)
   ---@field ya_path string
   ---@field buffers table<integer, boolean>
   ---@field attempted boolean
-  ---@field running boolean
+  ---@field stages table<string, ArcadiaPythonStageState>
   ---@field revision integer
+  ---@field configuration_configured boolean
+  ---@field client_error? string
   ---@field active_project_dir? string
-
   ---@type table<string, ArcadiaPythonState>
   local states = {}
   local workflow = {}
@@ -55,8 +59,12 @@ return function(api, server, display_name)
         ya_path = vim.fs.joinpath(context.arcadia_root, 'ya'),
         buffers = {},
         attempted = false,
-        running = false,
+        stages = {
+          configuration = { state = 'idle' },
+          build = { state = 'idle' },
+        },
         revision = 0,
+        configuration_configured = false,
       }
       states[context.lsp_root] = state
     end
@@ -84,19 +92,16 @@ return function(api, server, display_name)
     end
     return result
   end
-
   ---@param state ArcadiaPythonState
   ---@return string
   local function manifest_path(state)
     return vim.fs.joinpath(state.data_dir, 'config.json')
   end
-
   ---@param state ArcadiaPythonState
   ---@return string
   local function project_config_path(state)
     return vim.fs.joinpath(state.lsp_root, 'pyrightconfig.json')
   end
-
   ---@param state ArcadiaPythonState
   ---@return boolean, string?
   local function server_available(state)
@@ -117,6 +122,47 @@ return function(api, server, display_name)
     api.config.extend(state.lsp_root, SERVER, {
       settings = { [settings_key] = { analysis = { extraPaths = extra_paths } } },
     })
+    state.configuration_configured = true
+  end
+
+  ---@param state ArcadiaPythonState
+  ---@param stage string
+  ---@return boolean
+  local function stage_is_running(state, stage)
+    return state.stages[stage].state == 'waiting'
+  end
+
+  ---@param state ArcadiaPythonState
+  ---@return boolean
+  local function any_stage_running(state)
+    return stage_is_running(state, 'configuration') or stage_is_running(state, 'build')
+  end
+
+  ---@param state ArcadiaPythonState
+  local function update_status(state)
+    local configuration = state.stages.configuration
+    local build = state.stages.build
+    if configuration.state == 'waiting' and build.state == 'waiting' then
+      publish(state, {
+        state = 'waiting',
+        stage = 'prepare',
+        message = ('Generating %s import paths and building Python results'):format(DISPLAY_NAME),
+      })
+    elseif configuration.state == 'waiting' then
+      publish(state, { state = 'waiting', stage = CONFIG_STAGE, message = configuration.message })
+    elseif build.state == 'waiting' then
+      publish(state, { state = 'waiting', stage = 'build', message = build.message })
+    elseif configuration.state == 'error' then
+      publish(state, { state = 'error', stage = CONFIG_STAGE, message = configuration.message })
+    elseif build.state == 'error' then
+      publish(state, { state = 'error', stage = 'build', message = build.message })
+    elseif state.client_error then
+      publish(state, { state = 'warning', stage = CONFIG_STAGE, message = state.client_error })
+    elseif configuration.state == 'ready' and build.state == 'ready' then
+      publish(state, { state = 'ready', stage = 'prepare' })
+    else
+      publish(state, { state = 'idle', stage = 'prepare' })
+    end
   end
 
   ---@param state ArcadiaPythonState
@@ -125,10 +171,12 @@ return function(api, server, display_name)
   local function start_client(state, restart)
     local available, message = server_available(state)
     if not available then
+      state.client_error = message
       api.notify.warn_once(state.lsp_root, SERVER, 'missing_' .. SERVER, message)
-      publish(state, { state = 'warning', stage = STAGE, message = message })
+      publish(state, { state = 'warning', stage = CONFIG_STAGE, message = message })
       return false, message
     end
+    state.client_error = nil
     if restart then
       api.clients.restart(state.lsp_root, SERVER, valid_buffers(state))
     else
@@ -138,12 +186,13 @@ return function(api, server, display_name)
   end
 
   ---@param state ArcadiaPythonState
+  ---@param stage string
   ---@param code string
   ---@param message string
-  local function fail(state, code, message)
-    state.running = false
-    publish(state, { state = 'error', stage = STAGE, message = message })
+  local function fail_stage(state, stage, code, message)
+    state.stages[stage] = { state = 'error', message = message }
     api.notify.warn_once(state.lsp_root, SERVER, code, message)
+    update_status(state)
   end
 
   ---@param path string?
@@ -157,20 +206,20 @@ return function(api, server, display_name)
   ---@param result ArcadiaLspJobResult
   ---@param revision integer
   ---@param project_dir string
-  local function finish(state, result, revision, project_dir)
+  local function finish_configuration(state, result, revision, project_dir)
     if revision ~= state.revision then
       remove_project(project_dir)
       return
     end
-    state.running = false
     if result.timed_out then
       remove_project(project_dir)
-      fail(state, 'ya_ide_timeout', 'ya ide vscode timed out')
+      fail_stage(state, 'configuration', 'ya_ide_timeout', 'ya ide vscode timed out')
       return
     end
     if result.cancelled then
       remove_project(project_dir)
-      publish(state, { state = 'idle', stage = STAGE })
+      state.stages.configuration = { state = 'idle' }
+      update_status(state)
       return
     end
     if result.code ~= 0 then
@@ -180,7 +229,7 @@ return function(api, server, display_name)
         message = message .. ': ' .. detail
       end
       remove_project(project_dir)
-      fail(state, 'ya_ide_failed', message)
+      fail_stage(state, 'configuration', 'ya_ide_failed', message)
       return
     end
 
@@ -188,13 +237,13 @@ return function(api, server, display_name)
     local generated, parse_error = api.cache.from_workspace(workspace, project_dir)
     if not generated then
       remove_project(project_dir)
-      fail(state, 'invalid_pyright_config', parse_error)
+      fail_stage(state, 'configuration', 'invalid_pyright_config', parse_error)
       return
     end
     local installed, install_error = api.cache.install(manifest_path(state), generated, revision)
     if not installed then
       remove_project(project_dir)
-      fail(state, 'pyright_cache_install', install_error)
+      fail_stage(state, 'configuration', 'pyright_cache_install', install_error)
       return
     end
 
@@ -205,60 +254,77 @@ return function(api, server, display_name)
     if started and previous and previous ~= project_dir then
       remove_project(previous)
     end
-    if started then
-      publish(state, { state = 'ready', stage = STAGE })
+    state.stages.configuration = { state = 'ready' }
+    update_status(state)
+  end
+
+  ---@param state ArcadiaPythonState
+  ---@param result ArcadiaLspJobResult
+  ---@param revision integer
+  local function finish_build(state, result, revision)
+    if revision ~= state.revision then
+      return
+    end
+    if result.timed_out then
+      fail_stage(state, 'build', 'ya_make_timeout', 'ya make timed out')
+      return
+    end
+    if result.cancelled then
+      state.stages.build = { state = 'idle' }
+      update_status(state)
+      return
+    end
+    if result.code ~= 0 then
+      local detail = (result.stderr or ''):gsub('%s+$', '')
+      local message = 'ya make failed'
+      if detail ~= '' then
+        message = message .. ': ' .. detail
+      end
+      fail_stage(state, 'build', 'ya_make_failed', message)
+      return
+    end
+
+    state.stages.build = { state = 'ready' }
+    if state.configuration_configured then
+      start_client(state, true)
+    end
+    update_status(state)
+  end
+
+  ---@param state ArcadiaPythonState
+  ---@param stage string
+  ---@return string
+  local function job_key(state, stage)
+    return state.lsp_root .. '\0' .. SERVER .. '\0' .. stage
+  end
+
+  ---@param state ArcadiaPythonState
+  ---@param bufnr integer
+  local function add_job_interest(state, bufnr)
+    for _, stage in ipairs { 'configuration', 'build' } do
+      if stage_is_running(state, stage) then
+        api.jobs.add_interest(job_key(state, stage), bufnr)
+      end
     end
   end
 
   ---@param state ArcadiaPythonState
-  ---@return string
-  local function job_key(state)
-    return state.lsp_root .. '\0' .. SERVER
+  local function cancel_jobs(state)
+    for _, stage in ipairs { 'configuration', 'build' } do
+      if stage_is_running(state, stage) then
+        api.jobs.cancel(job_key(state, stage), 'refresh requested')
+      end
+    end
   end
 
-  ---@param context table
-  ---@param force boolean
+  ---@param state ArcadiaPythonState
+  ---@param bufnr integer
+  ---@param revision integer
+  ---@param project_dir string
   ---@return boolean?, string?
-  local function generate(context, force)
-    local state = state_for(context)
-    if state.running and not force then
-      api.jobs.add_interest(job_key(state), context.bufnr)
-      return true
-    end
-    if state.running then
-      api.jobs.cancel(job_key(state), 'refresh requested')
-    end
-    state.revision = state.revision + 1
-    state.attempted = true
-    local revision = state.revision
-
-    local directory_ok, directory_error = api.paths.ensure(state.data_dir)
-    if not directory_ok then
-      fail(state, 'data_directory', directory_error)
-      return nil, directory_error
-    end
-    if vim.fn.executable(state.ya_path) ~= 1 then
-      local message = ('Arcadia ya is not executable: %s'):format(state.ya_path)
-      fail(state, 'missing_ya', message)
-      return nil, message
-    end
-
-    local project_dir = vim.fs.joinpath(
-      state.data_dir,
-      ('generation.%d.%s'):format(revision, tostring(vim.uv.hrtime()))
-    )
-    local project_ok, project_error = api.paths.ensure(project_dir)
-    if not project_ok then
-      fail(state, 'data_directory', project_error)
-      return nil, project_error
-    end
-    state.running = true
-    publish(state, {
-      state = 'waiting',
-      stage = STAGE,
-      message = ('Generating %s import paths'):format(DISPLAY_NAME),
-    })
-    local _, start_error = api.jobs.start(job_key(state), {
+  local function start_configuration(state, bufnr, revision, project_dir)
+    local key = job_key(state, 'configuration')
+    local job, start_error = api.jobs.start(key, {
       cmd = {
         state.ya_path,
         'ide',
@@ -269,20 +335,111 @@ return function(api, server, display_name)
         '-P=' .. project_dir,
       },
       cwd = state.lsp_root,
-      bufnr = context.bufnr,
+      bufnr = bufnr,
       on_exit = function(result)
-        finish(state, result, revision, project_dir)
+        finish_configuration(state, result, revision, project_dir)
       end,
     })
     if start_error then
       remove_project(project_dir)
-      fail(state, 'ya_ide_start_failed', ('cannot start ya ide vscode: %s'):format(start_error))
+      local message = ('cannot start ya ide vscode: %s'):format(start_error)
+      fail_stage(state, 'configuration', 'ya_ide_start_failed', message)
       return nil, start_error
     end
-    for _, bufnr in ipairs(valid_buffers(state)) do
-      api.jobs.add_interest(job_key(state), bufnr)
+    for _, interested_bufnr in ipairs(valid_buffers(state)) do
+      api.jobs.add_interest(key, interested_bufnr)
     end
-    return true
+    return job and true or nil
+  end
+
+  ---@param state ArcadiaPythonState
+  ---@param bufnr integer
+  ---@param revision integer
+  ---@return boolean?, string?
+  local function start_build(state, bufnr, revision)
+    local key = job_key(state, 'build')
+    local job, start_error = api.jobs.start(key, {
+      cmd = { state.ya_path, 'make', '--add-result=.py', '--replace-result', '-R' },
+      cwd = state.lsp_root,
+      bufnr = bufnr,
+      on_exit = function(result)
+        finish_build(state, result, revision)
+      end,
+    })
+    if start_error then
+      local message = ('cannot start ya make: %s'):format(start_error)
+      fail_stage(state, 'build', 'ya_make_start_failed', message)
+      return nil, start_error
+    end
+    for _, interested_bufnr in ipairs(valid_buffers(state)) do
+      api.jobs.add_interest(key, interested_bufnr)
+    end
+    return job and true or nil
+  end
+
+  ---@param context table
+  ---@param force boolean
+  ---@return boolean?, string?
+  local function generate(context, force)
+    local state = state_for(context)
+    if any_stage_running(state) and not force then
+      add_job_interest(state, context.bufnr)
+      return true
+    end
+    if any_stage_running(state) then
+      cancel_jobs(state)
+    end
+    state.revision = state.revision + 1
+    state.attempted = true
+    local revision = state.revision
+
+    local directory_ok, directory_error = api.paths.ensure(state.data_dir)
+    if not directory_ok then
+      state.stages = {
+        configuration = { state = 'idle' },
+        build = { state = 'idle' },
+      }
+      fail_stage(state, 'configuration', 'data_directory', directory_error)
+      return nil, directory_error
+    end
+    if vim.fn.executable(state.ya_path) ~= 1 then
+      local message = ('Arcadia ya is not executable: %s'):format(state.ya_path)
+      state.stages = {
+        configuration = { state = 'idle' },
+        build = { state = 'idle' },
+      }
+      fail_stage(state, 'configuration', 'missing_ya', message)
+      return nil, message
+    end
+
+    local project_dir = vim.fs.joinpath(
+      state.data_dir,
+      ('generation.%d.%s'):format(revision, tostring(vim.uv.hrtime()))
+    )
+    state.stages = {
+      configuration = {
+        state = 'waiting',
+        message = ('Generating %s import paths'):format(DISPLAY_NAME),
+      },
+      build = { state = 'waiting', message = 'Building Python results' },
+    }
+    update_status(state)
+
+    local configuration_started
+    local configuration_error
+    local project_ok, project_error = api.paths.ensure(project_dir)
+    if project_ok then
+      configuration_started, configuration_error =
+        start_configuration(state, context.bufnr, revision, project_dir)
+    else
+      configuration_error = project_error
+      fail_stage(state, 'configuration', 'data_directory', project_error)
+    end
+    local build_started, build_error = start_build(state, context.bufnr, revision)
+    if configuration_started or build_started then
+      return true
+    end
+    return nil, configuration_error or build_error
   end
 
   ---@param bufnr integer
@@ -302,7 +459,7 @@ return function(api, server, display_name)
       state.attempted = true
       local started = start_client(state, false)
       if started then
-        publish(state, { state = 'ready', stage = STAGE })
+        publish(state, { state = 'ready', stage = CONFIG_STAGE })
       end
       return true
     end
@@ -315,8 +472,8 @@ return function(api, server, display_name)
     end
     if not state.attempted then
       return generate(context, false)
-    elseif state.running then
-      api.jobs.add_interest(job_key(state), bufnr)
+    elseif any_stage_running(state) then
+      add_job_interest(state, bufnr)
     end
     return true
   end
@@ -334,7 +491,7 @@ return function(api, server, display_name)
     if vim.uv.fs_stat(project_config_path(state)) then
       local started, message = start_client(state, true)
       if started then
-        publish(state, { state = 'ready', stage = STAGE })
+        publish(state, { state = 'ready', stage = CONFIG_STAGE })
         return true
       end
       return nil, message
@@ -426,7 +583,7 @@ return function(api, server, display_name)
       message = ('%s preparation revision %d%s'):format(
         DISPLAY_NAME,
         state.revision,
-        state.running and ' is running' or ''
+        any_stage_running(state) and ' is running' or ''
       ),
     }
     return entries

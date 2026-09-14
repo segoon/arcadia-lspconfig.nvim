@@ -5,12 +5,14 @@ describe('Pyright workflow', function()
   local bufnr
   local api
   local jobs
+  local job_keys
   local patches
   local starts
   local restarts
   local statuses
   local warnings
   local cancelled
+  local start_error_stage
 
   before_each(function()
     root = helpers.tempdir()
@@ -26,7 +28,9 @@ describe('Pyright workflow', function()
     bufnr = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_name(bufnr, root .. '/project/main.py')
 
-    jobs, patches, starts, restarts, statuses, warnings, cancelled = {}, {}, {}, {}, {}, {}, {}
+    jobs, job_keys, patches, starts, restarts, statuses, warnings, cancelled =
+      {}, {}, {}, {}, {}, {}, {}, {}
+    start_error_stage = nil
     local data_dir = root .. '/data'
     api = {
       root = require 'arcadia-lspconfig.root',
@@ -49,7 +53,11 @@ describe('Pyright workflow', function()
         end,
       },
       jobs = {
-        start = function(_, spec)
+        start = function(key, spec)
+          if start_error_stage and vim.endswith(key, '\0' .. start_error_stage) then
+            return nil, 'requested start failure'
+          end
+          job_keys[#job_keys + 1] = key
           jobs[#jobs + 1] = spec
           return {}
         end,
@@ -91,7 +99,7 @@ describe('Pyright workflow', function()
     helpers.cleanup(root)
   end)
 
-  local function complete(job, extra_paths)
+  local function complete_configuration(job, extra_paths)
     local project = job.cmd[#job.cmd]:match '^%-P=(.+)$'
     helpers.write(
       project .. '/arcadia-pyright.code-workspace',
@@ -105,12 +113,18 @@ describe('Pyright workflow', function()
     return project
   end
 
-  it('generates automatically and starts only after success', function()
+  local function complete_build(job)
+    job.on_exit { code = 0, signal = 0, stdout = '', stderr = '' }
+  end
+
+  it('runs configuration and Python build in parallel and reloads for both successes', function()
     local workflow = require 'arcadia-lspconfig.servers.pyright'(api)
 
     assert.is_true(workflow.activate(bufnr))
     assert.are.equal(0, #starts)
-    assert.are.equal(1, #jobs)
+    assert.are.equal(2, #jobs)
+    local key = vim.fs.normalize(root .. '/project') .. '\0pyright\0'
+    assert.are.same({ key .. 'configuration', key .. 'build' }, job_keys)
     assert.are.same({
       root .. '/ya',
       'ide',
@@ -120,12 +134,28 @@ describe('Pyright workflow', function()
       '-W=arcadia-pyright',
     }, vim.list_slice(jobs[1].cmd, 1, 6))
     assert.are.equal(vim.fs.normalize(root .. '/project'), jobs[1].cwd)
+    assert.are.same({
+      root .. '/ya',
+      'make',
+      '--add-result=.py',
+      '--replace-result',
+      '-R',
+    }, jobs[2].cmd)
+    assert.are.equal(vim.fs.normalize(root .. '/project'), jobs[2].cwd)
+    assert.are.equal('prepare', statuses[#statuses].stage)
 
-    local project = complete(jobs[1], { '/arcadia', '/generated' })
+    local project = complete_configuration(jobs[1], { '/arcadia', '/generated' })
 
     assert.are.same({ '/arcadia', '/generated' }, patches[1].settings.python.analysis.extraPaths)
     assert.are.equal(1, #restarts)
+    assert.are.equal('waiting', statuses[#statuses].state)
+    assert.are.equal('build', statuses[#statuses].stage)
+
+    complete_build(jobs[2])
+
+    assert.are.equal(2, #restarts)
     assert.are.equal('ready', statuses[#statuses].state)
+    assert.are.equal('prepare', statuses[#statuses].stage)
     assert.are.equal(project, assert(api.cache.read(root .. '/data/config.json')).project_dir)
   end)
 
@@ -141,8 +171,24 @@ describe('Pyright workflow', function()
     assert.is_true(workflow.activate(bufnr))
 
     assert.are.equal(1, #starts)
-    assert.are.equal(1, #jobs)
+    assert.are.equal(2, #jobs)
     assert.are.same({ '/cached' }, patches[1].settings.python.analysis.extraPaths)
+  end)
+
+  it('skips a build reload when it finishes before initial configuration', function()
+    local workflow = require 'arcadia-lspconfig.servers.pyright'(api)
+    assert.is_true(workflow.activate(bufnr))
+
+    complete_build(jobs[2])
+
+    assert.are.equal(0, #restarts)
+    assert.are.equal('waiting', statuses[#statuses].state)
+    assert.are.equal('pyright_config', statuses[#statuses].stage)
+
+    complete_configuration(jobs[1], { '/generated' })
+
+    assert.are.equal(1, #restarts)
+    assert.are.equal('ready', statuses[#statuses].state)
   end)
 
   it('uses the BasedPyright server and executable when selected', function()
@@ -164,14 +210,16 @@ describe('Pyright workflow', function()
       require 'arcadia-lspconfig.servers.pyright'(api, 'basedpyright', 'BasedPyright')
 
     assert.is_true(workflow.activate(bufnr))
-    complete(jobs[1], { '/based' })
+    complete_configuration(jobs[1], { '/based' })
 
     assert.are.equal('basedpyright', configured_server)
     assert.are.equal('basedpyright', restarted_server)
     assert.are.same({ '/based' }, patches[1].settings.basedpyright.analysis.extraPaths)
     assert.is_nil(patches[1].settings.python)
+    assert.are.equal('build', statuses[#statuses].stage)
+    complete_build(jobs[2])
     assert.are.equal('ready', statuses[#statuses].state)
-    assert.are.equal('basedpyright_config', statuses[#statuses].stage)
+    assert.are.equal('prepare', statuses[#statuses].stage)
   end)
 
   it('honors a project pyrightconfig without generation', function()
@@ -191,6 +239,7 @@ describe('Pyright workflow', function()
     assert.is_true(workflow.activate(bufnr))
 
     jobs[1].on_exit { code = 1, signal = 0, stdout = '', stderr = 'requested failure\n' }
+    complete_build(jobs[2])
 
     assert.are.equal(0, #starts)
     assert.are.equal(0, #restarts)
@@ -198,20 +247,63 @@ describe('Pyright workflow', function()
     assert.are.equal('ya ide vscode failed: requested failure', statuses[#statuses].message)
   end)
 
+  it('keeps generated configuration active when the Python build fails', function()
+    local workflow = require 'arcadia-lspconfig.servers.pyright'(api)
+    assert.is_true(workflow.activate(bufnr))
+    complete_configuration(jobs[1], { '/generated' })
+
+    jobs[2].on_exit { code = 1, signal = 0, stdout = '', stderr = 'build failed\n' }
+
+    assert.are.equal(1, #restarts)
+    assert.are.same({ 'ya_make_failed' }, warnings)
+    assert.are.equal('error', statuses[#statuses].state)
+    assert.are.equal('build', statuses[#statuses].stage)
+    assert.are.equal('ya make failed: build failed', statuses[#statuses].message)
+  end)
+
+  it('continues the build when configuration generation cannot start', function()
+    start_error_stage = 'configuration'
+    local workflow = require 'arcadia-lspconfig.servers.pyright'(api)
+
+    assert.is_true(workflow.activate(bufnr))
+    assert.are.equal(1, #jobs)
+    assert.are.same(
+      { root .. '/ya', 'make', '--add-result=.py', '--replace-result', '-R' },
+      jobs[1].cmd
+    )
+    complete_build(jobs[1])
+
+    assert.are.same({ 'ya_ide_start_failed' }, warnings)
+    assert.are.equal('error', statuses[#statuses].state)
+    assert.are.equal('pyright_config', statuses[#statuses].stage)
+  end)
+
   it('cancels refresh and prevents stale results from replacing new output', function()
     local workflow = require 'arcadia-lspconfig.servers.pyright'(api)
     assert.is_true(workflow.activate(bufnr))
-    local old_job = jobs[1]
-    local old_project = old_job.cmd[#old_job.cmd]:match '^%-P=(.+)$'
+    local old_configuration = jobs[1]
+    local old_build = jobs[2]
+    local old_project = old_configuration.cmd[#old_configuration.cmd]:match '^%-P=(.+)$'
 
     assert.is_true(workflow.refresh(bufnr))
-    local new_job = jobs[2]
-    local new_project = complete(new_job, { '/new' })
-    old_job.on_exit { code = 0, signal = 15, stdout = '', stderr = '', cancelled = true }
+    local new_configuration = jobs[3]
+    local new_build = jobs[4]
+    local new_project = complete_configuration(new_configuration, { '/new' })
+    complete_build(new_build)
+    old_configuration.on_exit {
+      code = 0,
+      signal = 15,
+      stdout = '',
+      stderr = '',
+      cancelled = true,
+    }
+    old_build.on_exit { code = 0, signal = 15, stdout = '', stderr = '', cancelled = true }
 
     assert.are.equal(0, vim.fn.isdirectory(old_project))
     assert.are.equal(1, vim.fn.isdirectory(new_project))
-    assert.are.equal(1, #cancelled)
+    assert.are.equal(2, #cancelled)
+    local key = vim.fs.normalize(root .. '/project') .. '\0pyright\0'
+    assert.are.same({ key .. 'configuration', key .. 'build' }, cancelled)
     assert.are.same({ '/new' }, assert(api.cache.read(root .. '/data/config.json')).extra_paths)
   end)
 

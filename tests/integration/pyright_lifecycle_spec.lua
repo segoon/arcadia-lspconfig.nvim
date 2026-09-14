@@ -62,6 +62,7 @@ describe('Pyright lifecycle', function()
     helpers.write(root .. '/.arc/HEAD')
     helpers.write(root .. '/project/ya.make')
     helpers.write(root .. '/project/main.py', 'value = 1')
+    helpers.write(root .. '/project/.fake_ya_require_parallel')
     local fixture = vim.fs.joinpath(vim.fn.getcwd(), 'tests', 'fixtures', 'fake_ya.py')
     vim.fn.writefile(vim.fn.readfile(fixture), root .. '/ya')
     vim.fn.setfperm(root .. '/ya', 'rwxr-xr-x')
@@ -87,7 +88,8 @@ describe('Pyright lifecycle', function()
       return value
         and value.servers.pyright.state == 'ready'
         and count_lines(log, 'ide:') == 1
-        and count_lines(log, 'pyright:') == 1
+        and count_lines(log, 'make:') == 1
+        and count_lines(log, 'pyright:') >= 1
         and #vim.lsp.get_clients { bufnr = bufnr, name = 'pyright' } == 1
     end, 20))
 
@@ -115,5 +117,6 @@ describe('Pyright lifecycle', function()
         and #vim.lsp.get_clients { bufnr = bufnr, name = 'pyright' } == 1
     end, 20))
     assert.are.equal(0, count_lines(log, 'ide:'))
+    assert.are.equal(0, count_lines(log, 'make:'))
   end)
 end)

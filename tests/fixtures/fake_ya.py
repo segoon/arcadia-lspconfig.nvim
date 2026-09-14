@@ -42,11 +42,13 @@ def dump_compile_commands():
 
 
 def make():
-    if not synchronize("make", "dump"):
+    python_build = "--add-result=.py" in sys.argv
+    if not synchronize("make", "ide" if python_build else "dump"):
         return 1
-    output_arg = next(arg for arg in sys.argv if arg.startswith("-o="))
-    output = pathlib.Path(output_arg.split("=", 1)[1])
-    output.mkdir(parents=True, exist_ok=True)
+    if not python_build:
+        output_arg = next(arg for arg in sys.argv if arg.startswith("-o="))
+        output = pathlib.Path(output_arg.split("=", 1)[1])
+        output.mkdir(parents=True, exist_ok=True)
     append_log("make:" + os.getcwd() + ":" + " ".join(sys.argv[2:]))
     if pathlib.Path(".fake_ya_make_fail").exists():
         print("requested make failure", file=sys.stderr)
@@ -55,6 +57,8 @@ def make():
 
 
 def ide_vscode():
+    if not synchronize("ide", "make"):
+        return 1
     output_arg = next(arg for arg in sys.argv if arg.startswith("-P="))
     output = pathlib.Path(output_arg.split("=", 1)[1])
     output.mkdir(parents=True, exist_ok=True)
