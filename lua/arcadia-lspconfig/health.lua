@@ -22,79 +22,15 @@ local function project_buffer()
   return current
 end
 
----@param roots table
-local function check_pyright(roots)
-  local data_dir = require('arcadia-lspconfig.paths').data(roots.lsp_root, 'pyright')
-  health.info(('pyright data directory: %s'):format(data_dir))
-  local project_config = vim.fs.joinpath(roots.lsp_root, 'pyrightconfig.json')
-  if vim.uv.fs_stat(project_config) then
-    health.ok(('Project Pyright configuration: %s'):format(project_config))
-  else
-    local manifest = vim.fs.joinpath(data_dir, 'config.json')
-    local cached, cache_error = require('arcadia-lspconfig.pyright_cache').read(manifest)
-    if cached then
-      health.ok(('Valid cached Pyright configuration: %s'):format(manifest))
-    elseif vim.uv.fs_stat(manifest) then
-      health.error(('Invalid cached Pyright configuration: %s'):format(cache_error))
+---@param entries ArcadiaLspHealthEntry[]
+local function render(entries)
+  for _, entry in ipairs(entries) do
+    local report = health[entry.level]
+    if type(report) == 'function' then
+      report(entry.message)
     else
-      health.info 'No cached Pyright configuration exists yet'
+      health.error(('Invalid health level: %s'):format(vim.inspect(entry.level)))
     end
-  end
-
-  local workflow = require('arcadia-lspconfig')._state().workflows.pyright
-  local server_state = workflow and workflow._states()[roots.lsp_root] or nil
-  if not workflow then
-    health.info 'Arcadia Pyright integration is not configured'
-  elseif not server_state then
-    health.info 'No Pyright workflow has run for this root in the current session'
-  else
-    health.info(
-      ('Pyright preparation revision %d%s'):format(
-        server_state.revision,
-        server_state.running and ' is running' or ''
-      )
-    )
-  end
-end
-
----@param roots table
-local function check_clangd(roots)
-  local data_dir = require('arcadia-lspconfig.paths').data(roots.lsp_root, 'clangd')
-  health.info(('clangd data directory: %s'):format(data_dir))
-  local database = vim.fs.joinpath(data_dir, 'compile_commands.json')
-  if require('arcadia-lspconfig.cache').is_valid(database) then
-    health.ok(('Valid compilation database: %s'):format(database))
-  elseif vim.uv.fs_stat(database) then
-    health.error(('Invalid compilation database: %s'):format(database))
-  else
-    health.info 'No cached compilation database exists yet'
-  end
-
-  local workflow = require('arcadia-lspconfig')._state().workflows.clangd
-  if not workflow then
-    health.info 'Arcadia clangd integration is not configured'
-    return
-  end
-  local server_state = workflow._states()[roots.lsp_root]
-  if not server_state then
-    health.info 'No clangd workflow has run for this root in the current session'
-    return
-  end
-  local running = {}
-  for _, stage in ipairs { 'compile_commands', 'build' } do
-    if server_state.stages[stage].state == 'waiting' then
-      running[#running + 1] = stage
-    end
-  end
-  if #running > 0 then
-    health.info(
-      ('clangd preparation revision %d is running: %s'):format(
-        server_state.revision,
-        table.concat(running, ', ')
-      )
-    )
-  else
-    health.info(('clangd preparation revision: %d'):format(server_state.revision))
   end
 end
 
@@ -108,12 +44,16 @@ function M.check()
     health.error 'Neovim 0.11.3 or newer is required'
   end
 
-  for _, server in ipairs { 'clangd', 'pyright' } do
-    local definition = ('lsp/%s.lua'):format(server)
-    if #vim.api.nvim_get_runtime_file(definition, false) > 0 then
-      health.ok(('nvim-lspconfig provides %s'):format(definition))
-    else
-      health.error(('nvim-lspconfig does not provide %s'):format(definition))
+  local plugin = require 'arcadia-lspconfig'
+  local runtime_state = plugin._state()
+  for _, definition in ipairs(runtime_state.definitions) do
+    if not runtime_state.options or runtime_state.options.servers[definition.name] ~= false then
+      local config_file = ('lsp/%s.lua'):format(definition.name)
+      if #vim.api.nvim_get_runtime_file(config_file, false) > 0 then
+        health.ok(('nvim-lspconfig provides %s'):format(config_file))
+      else
+        health.error(('nvim-lspconfig does not provide %s'):format(config_file))
+      end
     end
   end
 
@@ -137,18 +77,17 @@ function M.check()
   end
   health.ok(('LSP root: %s'):format(roots.lsp_root))
 
-  local ya_path = vim.fs.joinpath(roots.arcadia_root, 'ya')
-  if vim.fn.executable(ya_path) == 1 then
-    health.ok(('Arcadia ya is executable: %s'):format(ya_path))
-  else
-    health.error(('Arcadia ya is not executable: %s'):format(ya_path))
+  local workflow = plugin._workflow(bufnr)
+  if not workflow then
+    health.info 'No enabled Arcadia LSP integration applies to the current buffer'
+    return
   end
-
-  if vim.bo[bufnr].filetype == 'python' then
-    check_pyright(roots)
-  else
-    check_clangd(roots)
+  local context = workflow.context(bufnr)
+  if not context then
+    health.info 'The applicable Arcadia LSP workflow has no context for the current buffer'
+    return
   end
+  render(workflow.health(context))
 end
 
 return M

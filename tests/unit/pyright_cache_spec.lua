@@ -6,7 +6,7 @@ describe('Pyright cache', function()
 
   before_each(function()
     root = helpers.tempdir()
-    cache = require 'arcadia-lspconfig.pyright_cache'
+    cache = require 'arcadia-lspconfig.servers.pyright_cache'
   end)
 
   after_each(function()

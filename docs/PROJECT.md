@@ -147,20 +147,27 @@ defined by the responsible server module.
 
 ### 8.1 Server modules
 
-Built-in server modules live separately and return a function:
+Built-in server definitions and all server-specific implementation details live
+under `lua/arcadia-lspconfig/servers/`. The registry injects an ordered list of
+definitions into the server-neutral runtime:
 
 ```lua
--- lua/arcadia-lspconfig/servers/clangd.lua
-return function(api)
-  -- Register and implement the complete clangd workflow.
-end
+{
+  name = 'example',
+  default_options = {},
+  allowed_options = {},
+  create = function(api)
+    return require('arcadia-lspconfig.servers.example')(api)
+  end,
+}
 ```
 
-The first implemented module is:
-
-```text
-lua/arcadia-lspconfig/servers/clangd.lua
-```
+The runtime derives option validation, environment checks, installation,
+filetype routing, commands, and health selection from these definitions. It
+does not name or inspect a concrete LSP server. A definition's factory receives
+the generic core services through dependency injection and returns its
+workflow. Server-owned dependencies, such as generated-artifact caches, are
+added by the registry before invoking the workflow module.
 
 A module owns:
 
@@ -174,6 +181,7 @@ A module owns:
 - Refresh behavior.
 - Cleanup of partial generated artifacts.
 - Server-specific failures and recovery.
+- Server-specific health diagnostics.
 
 The `gopls` Arcadia workflow remains intentionally undefined until its module is
 implemented. Pyright generates isolated VS Code project data, extracts import paths,

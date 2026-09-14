@@ -28,6 +28,16 @@ describe('Pyright health checks', function()
     vim.api.nvim_buf_set_name(bufnr, root .. '/project/main.py')
     vim.bo[bufnr].filetype = 'python'
     vim.api.nvim_set_current_buf(bufnr)
+
+    vim.lsp.config('pyright', {
+      cmd = { 'true' },
+      filetypes = { 'python' },
+      root_markers = { 'ya.make' },
+    })
+    require('arcadia-lspconfig').setup {
+      servers = { clangd = false },
+      log = { level = 'off' },
+    }
   end)
 
   after_each(function()

@@ -6,7 +6,7 @@ describe('compile database cache', function()
 
   before_each(function()
     root = helpers.tempdir()
-    cache = require 'arcadia-lspconfig.cache'
+    cache = require 'arcadia-lspconfig.servers.clangd_cache'
   end)
 
   after_each(function()

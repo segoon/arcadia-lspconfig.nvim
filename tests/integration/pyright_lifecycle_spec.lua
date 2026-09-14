@@ -96,7 +96,9 @@ describe('Pyright lifecycle', function()
       vim.fs.normalize(root .. '/project'),
       client.config.settings.python.analysis.extraPaths[2],
     }, client.config.settings.python.analysis.extraPaths)
-    assert.is_not_nil(require('arcadia-lspconfig.pyright_cache').read(data_dir .. '/config.json'))
+    assert.is_not_nil(
+      require('arcadia-lspconfig.servers.pyright_cache').read(data_dir .. '/config.json')
+    )
     assert.are.equal(0, vim.fn.filereadable(root .. '/project/pyrightconfig.json'))
     helpers.cleanup(data_dir)
   end)

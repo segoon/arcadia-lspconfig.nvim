@@ -37,7 +37,7 @@ describe('Pyright workflow', function()
           return true
         end,
       },
-      pyright_cache = require 'arcadia-lspconfig.pyright_cache',
+      cache = require 'arcadia-lspconfig.servers.pyright_cache',
       config = {
         extend = function(_, _, patch)
           patches[#patches + 1] = vim.deepcopy(patch)
@@ -124,16 +124,13 @@ describe('Pyright workflow', function()
     assert.are.same({ '/arcadia', '/generated' }, patches[1].settings.python.analysis.extraPaths)
     assert.are.equal(1, #restarts)
     assert.are.equal('ready', statuses[#statuses].state)
-    assert.are.equal(
-      project,
-      assert(api.pyright_cache.read(root .. '/data/config.json')).project_dir
-    )
+    assert.are.equal(project, assert(api.cache.read(root .. '/data/config.json')).project_dir)
   end)
 
   it('starts a valid cache immediately and refreshes in the background', function()
     local project = root .. '/data/old'
     vim.fn.mkdir(project, 'p')
-    assert(api.pyright_cache.install(root .. '/data/config.json', {
+    assert(api.cache.install(root .. '/data/config.json', {
       project_dir = project,
       extra_paths = { '/cached' },
     }, 1))
@@ -184,10 +181,7 @@ describe('Pyright workflow', function()
     assert.are.equal(0, vim.fn.isdirectory(old_project))
     assert.are.equal(1, vim.fn.isdirectory(new_project))
     assert.are.equal(1, #cancelled)
-    assert.are.same(
-      { '/new' },
-      assert(api.pyright_cache.read(root .. '/data/config.json')).extra_paths
-    )
+    assert.are.same({ '/new' }, assert(api.cache.read(root .. '/data/config.json')).extra_paths)
   end)
 
   it('refuses restart without project or cached configuration', function()

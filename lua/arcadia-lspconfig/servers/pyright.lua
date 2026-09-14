@@ -181,14 +181,13 @@ return function(api)
     end
 
     local workspace = vim.fs.joinpath(project_dir, 'arcadia-pyright.code-workspace')
-    local generated, parse_error = api.pyright_cache.from_workspace(workspace, project_dir)
+    local generated, parse_error = api.cache.from_workspace(workspace, project_dir)
     if not generated then
       remove_project(project_dir)
       fail(state, 'invalid_pyright_config', parse_error)
       return
     end
-    local installed, install_error =
-      api.pyright_cache.install(manifest_path(state), generated, revision)
+    local installed, install_error = api.cache.install(manifest_path(state), generated, revision)
     if not installed then
       remove_project(project_dir)
       fail(state, 'pyright_cache_install', install_error)
@@ -304,7 +303,7 @@ return function(api)
       return true
     end
 
-    local cached = api.pyright_cache.read(manifest_path(state))
+    local cached = api.cache.read(manifest_path(state))
     if cached then
       state.active_project_dir = cached.project_dir
       configure(state, cached.extra_paths)
@@ -349,7 +348,7 @@ return function(api)
     local state = state_for(context)
     state.buffers[bufnr] = true
     if not vim.uv.fs_stat(project_config_path(state)) then
-      local cached, cache_error = api.pyright_cache.read(manifest_path(state))
+      local cached, cache_error = api.cache.read(manifest_path(state))
       if not cached then
         return nil,
           ('no valid Pyright configuration is available: %s'):format(
@@ -364,6 +363,67 @@ return function(api)
       return nil, message
     end
     return true
+  end
+
+  ---@param context table
+  ---@return ArcadiaLspHealthEntry[]
+  function workflow.health(context)
+    local entries = {}
+    local state = state_for(context)
+    if vim.fn.executable(state.ya_path) == 1 then
+      entries[#entries + 1] = {
+        level = 'ok',
+        message = ('Arcadia ya is executable: %s'):format(state.ya_path),
+      }
+    else
+      entries[#entries + 1] = {
+        level = 'error',
+        message = ('Arcadia ya is not executable: %s'):format(state.ya_path),
+      }
+    end
+    local available, executable_error = pyright_available(state)
+    entries[#entries + 1] = {
+      level = available and 'ok' or 'error',
+      message = available and 'Pyright command is available' or executable_error,
+    }
+    entries[#entries + 1] = {
+      level = 'info',
+      message = ('%s data directory: %s'):format(SERVER, state.data_dir),
+    }
+    local project_config = project_config_path(state)
+    if vim.uv.fs_stat(project_config) then
+      entries[#entries + 1] = {
+        level = 'ok',
+        message = ('Project Pyright configuration: %s'):format(project_config),
+      }
+    else
+      local manifest = manifest_path(state)
+      local cached, cache_error = api.cache.read(manifest)
+      if cached then
+        entries[#entries + 1] = {
+          level = 'ok',
+          message = ('Valid cached Pyright configuration: %s'):format(manifest),
+        }
+      elseif vim.uv.fs_stat(manifest) then
+        entries[#entries + 1] = {
+          level = 'error',
+          message = ('Invalid cached Pyright configuration: %s'):format(cache_error),
+        }
+      else
+        entries[#entries + 1] = {
+          level = 'info',
+          message = 'No cached Pyright configuration exists yet',
+        }
+      end
+    end
+    entries[#entries + 1] = {
+      level = 'info',
+      message = ('Pyright preparation revision %d%s'):format(
+        state.revision,
+        state.running and ' is running' or ''
+      ),
+    }
+    return entries
   end
 
   ---@return table<string, ArcadiaPyrightState>
