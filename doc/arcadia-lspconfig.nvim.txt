@@ -18,8 +18,8 @@ arcadia-lspconfig.nvim extends native Neovim LSP configurations for Arcadia
 tier0 development. The current release supports clangd, Pyright, and
 BasedPyright. Go and other language modules are planned.
 
-The plugin configures clangd and Pyright during setup. The user explicitly
-enables each with
+The plugin configures clangd, Pyright, and BasedPyright during setup. The user
+explicitly enables the desired servers with
 |vim.lsp.enable()|.
 
 ==============================================================================
@@ -51,7 +51,7 @@ Default options: >lua
     servers = {
       clangd = {},
       pyright = {},
-      basedpyright = false,
+      basedpyright = {},
     },
     jobs = {
       cancel_on_buff_exit = true,
@@ -74,12 +74,16 @@ servers.pyright ~
 
                                 *arcadia-lspconfig-servers-basedpyright*
 servers.basedpyright ~
-    Disabled by default. To use BasedPyright, set servers.pyright = false and
-    servers.basedpyright = {}, then call vim.lsp.enable('basedpyright'). This
-    uses nvim-lspconfig's basedpyright configuration and its
+    Set to false to disable this plugin's BasedPyright integration. The table
+    has no configurable fields in the current release. Managing both Python
+    servers is supported; select which one is active with |vim.lsp.enable()|.
+    BasedPyright uses nvim-lspconfig's basedpyright configuration and its
     basedpyright-langserver command. Generated import paths are applied as
-    basedpyright.analysis.extraPaths. Pyright and BasedPyright cannot both be
-    enabled in setup.
+    basedpyright.analysis.extraPaths.
+
+If both Pyright and BasedPyright are activated for one buffer, both may attach.
+Refresh, restart, and health report that the active integration is ambiguous
+rather than selecting one silently.
 
                          *arcadia-lspconfig-cancel-on-buff-exit*
 jobs.cancel_on_buff_exit ~

@@ -30,7 +30,7 @@ describe('BasedPyright lifecycle', function()
       root_markers = { '.git' },
     })
     require('arcadia-lspconfig').setup {
-      servers = { clangd = false, pyright = false, basedpyright = {} },
+      servers = { clangd = false },
       jobs = { cancel_on_buff_exit = true, timeout_ms = 5000 },
       log = { level = 'off' },
     }

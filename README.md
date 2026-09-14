@@ -71,7 +71,7 @@ require('arcadia-lspconfig').setup({
   servers = {
     clangd = {},
     pyright = {},
-    basedpyright = false,
+    basedpyright = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -84,24 +84,18 @@ require('arcadia-lspconfig').setup({
 ```
 
 Set a server to `false` to leave it unmanaged by this plugin. The server tables
-have no options in the current release. Pyright is enabled by default;
-BasedPyright users should select it explicitly and enable its nvim-lspconfig
-server:
+have no options in the current release. Managing a server does not enable it;
+choose the Python server to activate with Neovim's standard API:
 
 ```lua
-require('arcadia-lspconfig').setup({
-  servers = {
-    pyright = false,
-    basedpyright = {},
-  },
-})
 vim.lsp.enable('basedpyright')
 ```
 
-`pyright` and `basedpyright` are mutually exclusive, preventing two Python
-language servers from attaching to the same buffer. The latter runs
+Use `vim.lsp.enable('pyright')` instead to activate Pyright. BasedPyright runs
 `basedpyright-langserver` through nvim-lspconfig's standard configuration and
-places generated import paths in `basedpyright.analysis.extraPaths`.
+receives generated import paths in `basedpyright.analysis.extraPaths`. If both
+Python servers are enabled, both may attach, but refresh, restart, and health
+report the ambiguous selection instead of choosing one silently.
 
 `cancel_on_buff_exit` drops a buffer's interest on `BufDelete` and
 `BufWipeout`. A shared job is terminated only after its last interested buffer

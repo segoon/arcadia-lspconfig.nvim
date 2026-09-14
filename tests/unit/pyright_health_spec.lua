@@ -38,6 +38,7 @@ describe('Pyright health checks', function()
       servers = { clangd = false },
       log = { level = 'off' },
     }
+    vim.lsp.enable 'pyright'
   end)
 
   after_each(function()
@@ -48,6 +49,7 @@ describe('Pyright health checks', function()
       vim.api.nvim_buf_delete(bufnr, { force = true })
     end
     vim.health = original_health
+    vim.lsp.enable('pyright', false)
     package.loaded['arcadia-lspconfig.health'] = nil
     helpers.cleanup(root)
   end)

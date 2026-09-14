@@ -399,7 +399,7 @@ require("arcadia-lspconfig").setup({
   servers = {
     clangd = {},
     pyright = {},
-    basedpyright = false,
+    basedpyright = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -412,9 +412,10 @@ require("arcadia-lspconfig").setup({
 ```
 
 Implemented servers are present by default. Setting it to `false` disables
-only this plugin's integration for that server. BasedPyright is the exception:
-it defaults to `false`, and selecting it requires disabling Pyright. This keeps
-the Python workflow unambiguous and prevents duplicate clients.
+only this plugin's integration for that server. Plugin integration and Neovim
+LSP activation are separate: users choose an active Python server with
+`vim.lsp.enable()`. Runtime command routing considers enabled servers and
+reports an ambiguity if multiple integrations match one buffer.
 
 ## 13. Status and events
 

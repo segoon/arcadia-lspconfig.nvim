@@ -77,9 +77,13 @@ function M.check()
   end
   health.ok(('LSP root: %s'):format(roots.lsp_root))
 
-  local workflow = plugin._workflow(bufnr)
+  local workflow, _, selection_error = plugin._workflow(bufnr)
   if not workflow then
-    health.info 'No enabled Arcadia LSP integration applies to the current buffer'
+    if selection_error then
+      health.error(selection_error)
+    else
+      health.info 'No enabled Arcadia LSP integration applies to the current buffer'
+    end
     return
   end
   local context = workflow.context(bufnr)

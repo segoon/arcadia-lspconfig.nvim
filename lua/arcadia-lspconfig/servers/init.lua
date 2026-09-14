@@ -42,14 +42,12 @@ return {
     name = 'pyright',
     default_options = {},
     allowed_options = {},
-    conflicts = { 'basedpyright' },
     create = create_pyright,
   },
   {
     name = 'basedpyright',
-    default_options = false,
+    default_options = {},
     allowed_options = {},
-    conflicts = { 'pyright' },
     create = create_basedpyright,
   },
 }

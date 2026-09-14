@@ -60,4 +60,32 @@ describe('health checks', function()
     )
     assert.is_false(vim.tbl_contains(messages, 'The current buffer is outside Arcadia'))
   end)
+
+  it('reports ambiguous enabled integrations', function()
+    local source = root .. '/project/main.py'
+    helpers.write(root .. '/.arc/HEAD')
+    helpers.write(root .. '/project/ya.make')
+    helpers.write(source)
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    buffers = { bufnr }
+    vim.api.nvim_buf_set_name(bufnr, source)
+    vim.api.nvim_set_current_buf(bufnr)
+
+    local plugin = require 'arcadia-lspconfig'
+    local original_workflow = plugin._workflow
+    plugin._workflow = function()
+      return nil,
+        nil,
+        'multiple enabled Arcadia LSP integrations apply to this buffer: basedpyright, pyright'
+    end
+    require('arcadia-lspconfig.health').check()
+    plugin._workflow = original_workflow
+
+    assert.is_true(
+      vim.tbl_contains(
+        messages,
+        'multiple enabled Arcadia LSP integrations apply to this buffer: basedpyright, pyright'
+      )
+    )
+  end)
 end)
