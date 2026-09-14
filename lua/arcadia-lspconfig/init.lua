@@ -102,7 +102,7 @@ local function create_commands()
     if not ok then
       vim.notify(err, vim.log.levels.WARN, { title = 'arcadia-lspconfig.nvim' })
     end
-  end, { desc = 'Regenerate Arcadia LSP configuration for the current buffer' })
+  end, { desc = 'Refresh Arcadia LSP preparation for the current buffer' })
 
   vim.api.nvim_create_user_command('ArcadiaLspStatus', function()
     local value = M.status(0)

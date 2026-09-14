@@ -48,7 +48,7 @@ The first version will not:
 
 - Install LSP servers or toolchains.
 - Configure formatters or linters.
-- Build or test Arcadia targets.
+- Build or test Arcadia targets unrelated to LSP preparation.
 - Provide code-generation commands unrelated to LSP preparation.
 - Support user-defined or third-party server modules.
 - Support repeated calls to `setup()`.
@@ -316,10 +316,35 @@ remain active.
 Starting a refresh while the same root/server workflow is already running
 cancels that workflow and starts it again.
 
+### 10.4 clangd preparation lifecycle
+
+For each applicable root, clangd preparation is a two-stage asynchronous
+pipeline:
+
+1. If a valid cached database exists, start checkout-local clangd immediately
+   with its directory configured as `compilationDatabasePath`.
+2. Concurrently run `ya dump compile-commands` with
+   `--cmd-build-root=<data-dir>/build_root` and `ya make --add-result=.hpp
+   --add-result=.cpp --replace-result -o=<data-dir>/build_root`.
+3. Validate and install successful dump output, then start or restart clangd
+   even when the generated database is unchanged.
+4. After a successful build, restart clangd only when a valid database is
+   already available. Do not replay a skipped restart if make finishes first.
+
+No Arcadia or system clangd is started for an applicable buffer without a valid
+database. Failure in either stage does not cancel the other stage. Existing
+valid clients and databases remain active; a failed initial dump leaves clangd
+stopped. A refresh cancels both active stage jobs and begins a new pipeline
+revision.
+
+Every asynchronous callback owns its revision-specific temporary artifacts.
+A stale callback may clean up only artifacts captured by its own revision; it
+must not read or remove paths belonging to current mutable state.
+
 ## 11. Asynchronous jobs
 
-Arcadia preparation commands, including commands such as
-`ya dump compile-commands`, must run asynchronously.
+Arcadia preparation commands, including `ya dump compile-commands` and
+`ya make`, must run asynchronously.
 
 Default job configuration:
 
@@ -407,6 +432,11 @@ At minimum, server status supports states such as:
 - `error`
 
 Modules may supply meaningful `stage` and `message` values.
+
+The clangd workflow uses `stage = "prepare"` while both jobs run and after both
+succeed. When only one job remains, or after a failure, it uses
+`stage = "compile_commands"` or `stage = "build"`. Dump errors take priority
+when both stages fail.
 
 ### 13.1 Statusline
 

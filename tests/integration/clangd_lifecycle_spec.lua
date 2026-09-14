@@ -13,6 +13,18 @@ local function count_lines(path, prefix)
   return count
 end
 
+local function has_line(path, expected)
+  if vim.fn.filereadable(path) == 0 then
+    return false
+  end
+  for _, line in ipairs(vim.fn.readfile(path)) do
+    if line == expected then
+      return true
+    end
+  end
+  return false
+end
+
 describe('clangd lifecycle', function()
   local setup_done = false
   local sandbox
@@ -92,14 +104,19 @@ describe('clangd lifecycle', function()
     assert.is_nil(require('arcadia-lspconfig').status(bufnr))
   end)
 
-  it('generates, configures, and starts checkout-local clangd', function()
+  it('runs preparation in parallel and starts checkout-local clangd after the dump', function()
     local root = checkout('success', '[{"file":"main.cpp","command":"c++ main.cpp"}]')
+    helpers.write(root .. '/project/.fake_ya_require_parallel')
     local bufnr = open_cpp(root .. '/project/main.cpp')
     local data_dir = paths.data(vim.fs.normalize(root .. '/project'), 'clangd')
     local database = data_dir .. '/compile_commands.json'
 
     assert.is_true(vim.wait(5000, function()
-      return vim.fn.filereadable(database) == 1
+      local value = require('arcadia-lspconfig').status(bufnr)
+      return value
+        and value.servers.clangd.state == 'ready'
+        and count_lines(log, 'make:') == 1
+        and vim.fn.filereadable(database) == 1
         and #vim.lsp.get_clients { bufnr = bufnr, name = 'clangd' } == 1
     end, 20))
 
@@ -107,17 +124,42 @@ describe('clangd lifecycle', function()
     assert.are.same({ root .. '/ya', 'tool', 'clangd' }, client.config.cmd)
     assert.are.equal(data_dir, client.config.init_options.compilationDatabasePath)
     assert.are.equal(1, count_lines(log, 'dump:'))
-    assert.are.equal(1, count_lines(log, 'clangd:'))
+    assert.is_true(count_lines(log, 'clangd:') >= 1)
+    assert.is_true(count_lines(log, 'clangd:') <= 2)
+    assert.is_true(
+      has_line(
+        log,
+        'dump:'
+          .. vim.fs.normalize(root .. '/project')
+          .. ':--cmd-build-root='
+          .. data_dir
+          .. '/build_root'
+      )
+    )
+    assert.is_true(
+      has_line(
+        log,
+        'make:'
+          .. vim.fs.normalize(root .. '/project')
+          .. ':--add-result=.hpp --add-result=.cpp --replace-result -o='
+          .. data_dir
+          .. '/build_root'
+      )
+    )
     helpers.cleanup(data_dir)
   end)
 
-  it('restarts for changed refresh and not for unchanged refresh', function()
+  it('reloads after dump and make for changed and unchanged refreshes', function()
     local root = checkout('refresh', '[]')
-    local bufnr = open_cpp(root .. '/project/main.cpp')
     local data_dir = paths.data(vim.fs.normalize(root .. '/project'), 'clangd')
+    helpers.write(data_dir .. '/compile_commands.json', '[]')
+    local bufnr = open_cpp(root .. '/project/main.cpp')
 
     assert.is_true(vim.wait(5000, function()
-      return count_lines(log, 'clangd:') == 1
+      local value = require('arcadia-lspconfig').status(bufnr)
+      return value
+        and value.servers.clangd.state == 'ready'
+        and count_lines(log, 'make:') == 1
         and #vim.lsp.get_clients { bufnr = bufnr, name = 'clangd' } == 1
     end, 20))
     helpers.write(
@@ -126,33 +168,57 @@ describe('clangd lifecycle', function()
     )
     assert.is_true(require('arcadia-lspconfig').refresh(bufnr))
     assert.is_true(vim.wait(5000, function()
-      return count_lines(log, 'clangd:') == 2
+      local value = require('arcadia-lspconfig').status(bufnr)
+      return value
+        and value.servers.clangd.state == 'ready'
+        and count_lines(log, 'dump:') == 2
+        and count_lines(log, 'make:') == 2
     end, 20))
 
     assert.is_true(require('arcadia-lspconfig').refresh(bufnr))
     assert.is_true(vim.wait(5000, function()
       local value = require('arcadia-lspconfig').status(bufnr)
-      return value and value.servers.clangd.state == 'ready'
+      return value
+        and value.servers.clangd.state == 'ready'
+        and count_lines(log, 'dump:') == 3
+        and count_lines(log, 'make:') == 3
     end, 20))
-    vim.wait(200)
-    assert.are.equal(2, count_lines(log, 'clangd:'))
     helpers.cleanup(data_dir)
   end)
 
-  it('starts fallback clangd when initial generation fails', function()
+  it('keeps the post-dump clangd when make fails', function()
+    local root = checkout('make-failure', '[]')
+    helpers.write(root .. '/project/.fake_ya_make_fail')
+    local bufnr = open_cpp(root .. '/project/main.cpp')
+    local data_dir = paths.data(vim.fs.normalize(root .. '/project'), 'clangd')
+
+    assert.is_true(vim.wait(5000, function()
+      local value = require('arcadia-lspconfig').status(bufnr)
+      return value
+        and value.servers.clangd.state == 'error'
+        and value.servers.clangd.stage == 'build'
+        and count_lines(log, 'clangd:') == 1
+        and #vim.lsp.get_clients { bufnr = bufnr, name = 'clangd' } == 1
+    end, 20))
+    assert.are.equal(1, count_lines(log, 'make:'))
+    helpers.cleanup(data_dir)
+  end)
+
+  it('does not start any clangd when initial generation fails', function()
     local root = checkout('failure', '[]')
     helpers.write(root .. '/project/.fake_ya_fail')
     local bufnr = open_cpp(root .. '/project/main.cpp')
     local data_dir = paths.data(vim.fs.normalize(root .. '/project'), 'clangd')
 
     assert.is_true(vim.wait(5000, function()
-      return count_lines(log, 'clangd:') == 1
-        and #vim.lsp.get_clients { bufnr = bufnr, name = 'clangd' } == 1
+      local value = require('arcadia-lspconfig').status(bufnr)
+      return value
+        and value.servers.clangd.state == 'error'
+        and value.servers.clangd.stage == 'compile_commands'
+        and count_lines(log, 'make:') == 1
     end, 20))
-    local value = require('arcadia-lspconfig').status(bufnr)
-    assert.are.equal('error', value.servers.clangd.state)
-    local client = vim.lsp.get_clients({ bufnr = bufnr, name = 'clangd' })[1]
-    assert.is_nil((client.config.init_options or {}).compilationDatabasePath)
+    assert.are.equal(0, count_lines(log, 'clangd:'))
+    assert.are.equal(0, #vim.lsp.get_clients { bufnr = bufnr, name = 'clangd' })
     helpers.cleanup(data_dir)
   end)
 end)

@@ -87,10 +87,23 @@ function M.check()
   local server_state = workflow._states()[roots.lsp_root]
   if not server_state then
     health.info 'No clangd workflow has run for this root in the current session'
-  elseif server_state.running then
-    health.info(('clangd preparation revision %d is running'):format(server_state.revision))
   else
-    health.info(('clangd preparation revision: %d'):format(server_state.revision))
+    local running = {}
+    for _, stage in ipairs { 'compile_commands', 'build' } do
+      if server_state.stages[stage].state == 'waiting' then
+        running[#running + 1] = stage
+      end
+    end
+    if #running > 0 then
+      health.info(
+        ('clangd preparation revision %d is running: %s'):format(
+          server_state.revision,
+          table.concat(running, ', ')
+        )
+      )
+    else
+      health.info(('clangd preparation revision: %d'):format(server_state.revision))
+    end
   end
 end
 

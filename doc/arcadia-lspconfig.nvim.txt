@@ -89,10 +89,19 @@ Symlinks are not resolved.
 
 Outside such a root, normal nvim-lspconfig clangd behavior is unchanged.
 
-For each LSP root the plugin runs asynchronously: >
+For each LSP root the plugin runs these commands concurrently: >
 
   cwd: {lsp-root}
-  {arcadia-root}/ya dump compile-commands --output-file={temporary-file}
+  {arcadia-root}/ya dump compile-commands
+    --output-file={temporary-file}
+    --cmd-build-root={data-dir}/build_root
+
+  cwd: {lsp-root}
+  {arcadia-root}/ya make
+    --add-result=.hpp
+    --add-result=.cpp
+    --replace-result
+    -o={data-dir}/build_root
 <
 Valid JSON array output is atomically installed at: >
 
@@ -105,11 +114,13 @@ Arcadia clangd is started as: >
 The cache directory is sent as
 "initializationOptions.compilationDatabasePath".
 
-A valid old cache is used immediately and refreshed in the background.
-Changed content restarts the root's clangd and reattaches its buffers.
-Unchanged content does not restart it. Without a cache, startup waits for
-generation. A generation error keeps the last working cache/client, or starts
-fallback Arcadia clangd without a database on the initial failure.
+A valid old cache starts clangd immediately before background preparation.
+Every successful dump starts or reloads clangd, even when the database is
+unchanged. A successful make reloads clangd only if a valid database exists at
+that time. Without one, no Arcadia or system clangd starts until the dump
+installs it. If make finishes first, its reload is skipped. Failure in either
+stage does not cancel the other; existing valid clients and databases remain
+active. A failed initial dump leaves clangd stopped.
 
 ==============================================================================
 API                                                *arcadia-lspconfig-api*
@@ -120,6 +131,9 @@ setup({options})                        *arcadia-lspconfig.setup()*
 status([{bufnr}])                       *arcadia-lspconfig.status()*
     Return nil outside an applicable Arcadia target. Otherwise return a table
     with arcadia_root, lsp_root, and per-server state.
+
+    While both clangd jobs run, stage is "prepare". With one job remaining,
+    its specific stage is reported. Dump errors take priority over build errors.
 
 statusline([{bufnr}])                   *arcadia-lspconfig.statusline()*
     Return an animated "lsp X" string while preparation is waiting, or an
@@ -137,7 +151,7 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:LspRefreshArcadia*
 :LspRefreshArcadia
-    Regenerate the compilation database for the current Arcadia LSP root.
+    Rerun both preparation jobs for the current Arcadia LSP root.
 
                                               *:ArcadiaLspStatus*
 :ArcadiaLspStatus
@@ -145,8 +159,8 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:ArcadiaLspRestart*
 :ArcadiaLspRestart
-    Restart clangd for the current buffer's Arcadia LSP root using the most
-    recent successful configuration.
+    Restart clangd for the current buffer's Arcadia LSP root. Refuse when no
+    valid compilation database is available.
 
 ==============================================================================
 HEALTH                                            *arcadia-lspconfig-health*
