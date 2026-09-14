@@ -5,11 +5,12 @@ Arcadia-aware extensions for Neovim's native LSP configuration.
 The first release supports C and C++ through `clangd`. For every applicable
 Arcadia `ya.make` root it:
 
-1. runs `<arcadia-root>/ya dump compile-commands` asynchronously;
-2. stores a validated `compile_commands.json` under Neovim's data directory;
-3. starts `<arcadia-root>/ya tool clangd`; and
-4. gives clangd the generated database through
-   `initializationOptions.compilationDatabasePath`.
+1. immediately starts `<arcadia-root>/ya tool clangd` when a valid cached
+   `compile_commands.json` exists;
+2. runs `<arcadia-root>/ya dump compile-commands` and `<arcadia-root>/ya make`
+   concurrently;
+3. installs the validated database and starts or reloads clangd after the dump;
+4. reloads clangd after a successful build when the database is available.
 
 Outside Arcadia, or when no `ya.make` exists, the plugin leaves the normal
 `nvim-lspconfig` clangd behavior unchanged.
@@ -104,23 +105,37 @@ Each full LSP root gets an isolated cache:
 stdpath('data')/arcadia-lspconfig/<sha256-of-lsp-root>/clangd/compile_commands.json
 ```
 
-The exact generation command is:
+The preparation commands run concurrently:
 
 ```text
 cwd: <lsp-root>
-<arcadia-root>/ya dump compile-commands --output-file=<temporary-file>
+<arcadia-root>/ya dump compile-commands \
+  --output-file=<temporary-file> \
+  --cmd-build-root=<data-dir>/build_root
+
+cwd: <lsp-root>
+<arcadia-root>/ya make \
+  --add-result=.hpp \
+  --add-result=.cpp \
+  --replace-result \
+  -o=<data-dir>/build_root
 ```
 
 Output must be a JSON array. It replaces the previous database atomically only
-after successful validation.
+after successful validation. A successful dump starts or reloads clangd. A
+successful `ya make` reloads clangd only when a valid database is already
+available.
 
 On the first open in a session:
 
-- With a valid cache, clangd starts immediately and regeneration runs in the
-  background. Clangd restarts only when the generated content changes.
-- Without a cache, clangd waits for generation and starts once on success.
-- If generation fails but Arcadia `ya` is executable, fallback
-  `<arcadia-root>/ya tool clangd` starts without a database override.
+- With a valid cache, clangd starts immediately before background preparation.
+  Each successful parallel stage reloads it.
+- Without a valid cache, no clangd client starts until the dump installs one.
+  If make finishes first, its reload is skipped rather than replayed later.
+- If generation fails without a valid cache, no checkout-local or system clangd
+  is started for the Arcadia buffer.
+- Failure in either preparation stage does not cancel the other. Existing valid
+  clients and databases remain active.
 - If Arcadia `ya` is missing or not executable, the plugin warns once and
   cannot start Arcadia clangd.
 
@@ -154,6 +169,10 @@ returns:
 }
 ```
 
+While both jobs run, the server reports `state = 'waiting'` and
+`stage = 'prepare'`. Once only one remains, its specific stage is reported.
+After both finish, dump errors take priority over build errors.
+
 `statusline()` returns one animated `lsp X` indicator while preparation is
 pending, and an empty string otherwise:
 
@@ -181,10 +200,10 @@ Its event data is deliberately unspecified; consumers should call `status()` or
 
 ## Commands
 
-- `:LspRefreshArcadia` regenerates the database for the current buffer's root.
+- `:LspRefreshArcadia` reruns both preparation jobs for the current buffer's root.
 - `:ArcadiaLspStatus` displays structured status.
-- `:ArcadiaLspRestart` restarts the current root's clangd with the last
-  successful configuration.
+- `:ArcadiaLspRestart` restarts the current root's clangd only when a valid
+  compilation database is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
   cache state, and the current workflow for the file from which it was invoked.
 
