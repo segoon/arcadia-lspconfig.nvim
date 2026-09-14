@@ -19,6 +19,8 @@ describe('Pyright workflow', function()
     vim.fn.setfperm(root .. '/ya', 'rwxr-xr-x')
     helpers.write(root .. '/pyright-langserver')
     vim.fn.setfperm(root .. '/pyright-langserver', 'rwxr-xr-x')
+    helpers.write(root .. '/basedpyright-langserver')
+    vim.fn.setfperm(root .. '/basedpyright-langserver', 'rwxr-xr-x')
     helpers.write(root .. '/project/ya.make')
     helpers.write(root .. '/project/main.py')
     bufnr = vim.api.nvim_create_buf(false, true)
@@ -141,6 +143,35 @@ describe('Pyright workflow', function()
     assert.are.equal(1, #starts)
     assert.are.equal(1, #jobs)
     assert.are.same({ '/cached' }, patches[1].settings.python.analysis.extraPaths)
+  end)
+
+  it('uses the BasedPyright server and executable when selected', function()
+    local configured_server
+    local restarted_server
+    api.config.resolve = function(_, server)
+      configured_server = server
+      return { cmd = { root .. '/basedpyright-langserver', '--stdio' } }
+    end
+    api.config.extend = function(_, server, patch)
+      configured_server = server
+      patches[#patches + 1] = vim.deepcopy(patch)
+    end
+    api.clients.restart = function(_, server, buffers)
+      restarted_server = server
+      restarts[#restarts + 1] = vim.deepcopy(buffers)
+    end
+    local workflow =
+      require 'arcadia-lspconfig.servers.pyright'(api, 'basedpyright', 'BasedPyright')
+
+    assert.is_true(workflow.activate(bufnr))
+    complete(jobs[1], { '/based' })
+
+    assert.are.equal('basedpyright', configured_server)
+    assert.are.equal('basedpyright', restarted_server)
+    assert.are.same({ '/based' }, patches[1].settings.basedpyright.analysis.extraPaths)
+    assert.is_nil(patches[1].settings.python)
+    assert.are.equal('ready', statuses[#statuses].state)
+    assert.are.equal('basedpyright_config', statuses[#statuses].stage)
   end)
 
   it('honors a project pyrightconfig without generation', function()

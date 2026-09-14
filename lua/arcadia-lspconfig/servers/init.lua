@@ -8,12 +8,26 @@ local function create_clangd(api)
 end
 
 ---@param api table
+---@param server string
+---@param display_name string
 ---@return ArcadiaLspWorkflow
-local function create_pyright(api)
+local function create_python_server(api, server, display_name)
   local dependencies = vim.tbl_extend('force', {}, api, {
     cache = require 'arcadia-lspconfig.servers.pyright_cache',
   })
-  return require 'arcadia-lspconfig.servers.pyright'(dependencies)
+  return require 'arcadia-lspconfig.servers.pyright'(dependencies, server, display_name)
+end
+
+---@param api table
+---@return ArcadiaLspWorkflow
+local function create_pyright(api)
+  return create_python_server(api, 'pyright', 'Pyright')
+end
+
+---@param api table
+---@return ArcadiaLspWorkflow
+local function create_basedpyright(api)
+  return create_python_server(api, 'basedpyright', 'BasedPyright')
 end
 
 ---@type ArcadiaLspServerDefinition[]
@@ -29,5 +43,11 @@ return {
     default_options = {},
     allowed_options = {},
     create = create_pyright,
+  },
+  {
+    name = 'basedpyright',
+    default_options = {},
+    allowed_options = {},
+    create = create_basedpyright,
   },
 }

@@ -8,12 +8,13 @@ to Arcadia tier0 projects.
 The target language set is:
 
 - `clangd` for C and C++
-- `pyright` for Python
+- `pyright` or `basedpyright` for Python
 - `gopls` for Go
 - (probably something else soon)
 
-The implemented built-in workflows are `clangd` and `pyright`. Other server
-modules remain planned work.
+The implemented built-in workflows are `clangd`, `pyright`, and `basedpyright`.
+The two Python servers share one workflow implementation and are mutually
+exclusive. Other server modules remain planned work.
 
 Each server is implemented by a separate Lua submodule. A server module owns its
 complete Arcadia-specific workflow, including file relevance checks,
@@ -398,6 +399,7 @@ require("arcadia-lspconfig").setup({
   servers = {
     clangd = {},
     pyright = {},
+    basedpyright = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -410,7 +412,10 @@ require("arcadia-lspconfig").setup({
 ```
 
 Implemented servers are present by default. Setting it to `false` disables
-only this plugin's integration for that server.
+only this plugin's integration for that server. Plugin integration and Neovim
+LSP activation are separate: users choose an active Python server with
+`vim.lsp.enable()`. Runtime command routing considers enabled servers and
+reports an ambiguity if multiple integrations match one buffer.
 
 ## 13. Status and events
 

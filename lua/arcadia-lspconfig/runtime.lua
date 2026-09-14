@@ -143,16 +143,35 @@ function Runtime.new(definitions)
   end
 
   ---@param bufnr integer
-  ---@return ArcadiaLspWorkflow?, ArcadiaLspServerDefinition?
+  ---@return ArcadiaLspWorkflow?, ArcadiaLspServerDefinition?, string?
   local function workflow_for_buffer(bufnr)
     local filetype = vim.bo[bufnr].filetype
+    local matches = {}
     for _, entry in ipairs(active) do
       local base = require('arcadia-lspconfig.config').base(entry.definition.name)
-      if base and vim.tbl_contains(base.filetypes or {}, filetype) then
-        return entry.workflow, entry.definition
+      if
+        vim.lsp.is_enabled(entry.definition.name)
+        and base
+        and vim.tbl_contains(base.filetypes or {}, filetype)
+      then
+        matches[#matches + 1] = entry
       end
     end
-    return nil, nil
+    if #matches == 1 then
+      return matches[1].workflow, matches[1].definition
+    end
+    if #matches > 1 then
+      local names = vim.tbl_map(function(entry)
+        return entry.definition.name
+      end, matches)
+      table.sort(names)
+      return nil,
+        nil,
+        ('multiple enabled Arcadia LSP integrations apply to this buffer: %s'):format(
+          table.concat(names, ', ')
+        )
+    end
+    return nil, nil, nil
   end
 
   ---@param definition ArcadiaLspServerDefinition
@@ -209,10 +228,10 @@ function Runtime.new(definitions)
     end, { desc = 'Show Arcadia LSP status for the current buffer' })
 
     vim.api.nvim_create_user_command('ArcadiaLspRestart', function()
-      local workflow = workflow_for_buffer(vim.api.nvim_get_current_buf())
+      local workflow, _, selection_error = workflow_for_buffer(vim.api.nvim_get_current_buf())
       if not workflow then
         vim.notify(
-          'no enabled Arcadia LSP integration applies to the current buffer',
+          selection_error or 'no enabled Arcadia LSP integration applies to the current buffer',
           vim.log.levels.WARN,
           { title = 'arcadia-lspconfig.nvim' }
         )
@@ -284,15 +303,16 @@ function Runtime.new(definitions)
   function M.refresh(bufnr)
     bufnr = bufnr or 0
     bufnr = bufnr == 0 and vim.api.nvim_get_current_buf() or bufnr
-    local workflow = workflow_for_buffer(bufnr)
+    local workflow, _, selection_error = workflow_for_buffer(bufnr)
     if not workflow then
-      return nil, 'no enabled Arcadia LSP integration applies to the current buffer'
+      return nil,
+        selection_error or 'no enabled Arcadia LSP integration applies to the current buffer'
     end
     return workflow.refresh(bufnr)
   end
 
   ---@param bufnr integer
-  ---@return ArcadiaLspWorkflow?, ArcadiaLspServerDefinition?
+  ---@return ArcadiaLspWorkflow?, ArcadiaLspServerDefinition?, string?
   function M._workflow(bufnr)
     return workflow_for_buffer(bufnr)
   end
