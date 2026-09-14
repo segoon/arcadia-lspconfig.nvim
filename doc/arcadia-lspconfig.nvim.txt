@@ -159,18 +159,23 @@ active. A failed initial dump leaves clangd stopped.
 PYRIGHT ~
 
 For a Python buffer, an existing {lsp-root}/pyrightconfig.json is honored and
-no generation is performed. Otherwise the plugin runs: >
+no preparation is performed. Otherwise the plugin runs these concurrently: >
 
   cwd: {lsp-root}
   {arcadia-root}/ya ide vscode --py3 --no-pyright-config
     -W=arcadia-pyright -P={revision-project-directory}
+
+  cwd: {lsp-root}
+  {arcadia-root}/ya make --add-result=.py --replace-result -R
 <
 The generated VS Code workspace's python.analysis.extraPaths are validated,
 stored under the root-specific Pyright data directory, and merged into native
 Pyright settings. A valid cache starts Pyright immediately and refreshes in the
-background. Without a cache, startup waits for successful generation. Failed,
-cancelled, timed-out, and stale generations cannot replace the last working
-configuration.
+background. Without a cache, startup waits for successful generation. A
+successful Python build reloads the server only when configuration is already
+available; a build-first reload is skipped. The stages fail independently,
+configuration errors take status priority, and failed, cancelled, timed-out,
+and stale work cannot replace the last working configuration.
 
 BasedPyright uses the same preparation and pyrightconfig.json behavior. Select
 it with servers.basedpyright as described in |arcadia-lspconfig-setup|. Its
@@ -187,8 +192,9 @@ status([{bufnr}])                       *arcadia-lspconfig.status()*
     Return nil outside an applicable Arcadia target. Otherwise return a table
     with arcadia_root, lsp_root, and per-server state.
 
-    While both clangd jobs run, stage is "prepare". With one job remaining,
-    its specific stage is reported. Dump errors take priority over build errors.
+    While both clangd or Python preparation jobs run, stage is "prepare". With
+    one job remaining, its specific stage is reported. Configuration-producing
+    stage errors take priority over build errors.
 
 statusline([{bufnr}])                   *arcadia-lspconfig.statusline()*
     Return an animated "lsp X" string while preparation is waiting, or an

@@ -132,11 +132,25 @@ stdpath('data')/arcadia-lspconfig/<sha256-of-lsp-root>/clangd/compile_commands.j
 
 The selected Python server stores a validated manifest and generated `.links`
 tree below its server-specific cache directory. Existing
-`{lsp-root}/pyrightconfig.json` files take precedence. Without one, cached paths
-start the server immediately while
-`ya ide vscode --py3 --no-pyright-config` refreshes them in the background.
-Without a valid cache, the server waits for generation; failures preserve the last
-working cache and client.
+`{lsp-root}/pyrightconfig.json` files take precedence and bypass preparation.
+Without one, cached paths start the server immediately while two commands run
+concurrently in the background:
+
+```text
+cwd: <lsp-root>
+<arcadia-root>/ya ide vscode --py3 --no-pyright-config \
+  -W=arcadia-pyright -P=<revision-project-directory>
+
+cwd: <lsp-root>
+<arcadia-root>/ya make --add-result=.py --replace-result -R
+```
+
+Without a valid cache, the server waits for successful extra-path generation.
+A successful generation starts or reloads the server. A successful Python build
+reloads it only when configuration is already available; if the build finishes
+first, that reload is skipped rather than replayed later. Failure in either
+stage does not cancel the other, and existing working configuration and clients
+are preserved.
 
 The preparation commands run concurrently:
 
@@ -204,7 +218,8 @@ returns:
 
 While both jobs run, the server reports `state = 'waiting'` and
 `stage = 'prepare'`. Once only one remains, its specific stage is reported.
-After both finish, dump errors take priority over build errors.
+After both finish, configuration-generation errors take priority over build
+errors. The same aggregation applies to the parallel Python preparation stages.
 
 `statusline()` returns one animated `lsp X` indicator while preparation is
 pending, and an empty string otherwise:

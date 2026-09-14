@@ -353,10 +353,24 @@ Every asynchronous callback owns its revision-specific temporary artifacts.
 A stale callback may clean up only artifacts captured by its own revision; it
 must not read or remove paths belonging to current mutable state.
 
+### 10.5 Python preparation lifecycle
+
+Without a project-owned `pyrightconfig.json`, the selected Pyright-compatible
+workflow concurrently runs `ya ide vscode --py3 --no-pyright-config` and
+`ya make --add-result=.py --replace-result -R` in the LSP root. A valid cached
+configuration starts the server before both background stages.
+
+Successful configuration generation validates and installs extra paths, then
+restarts the server. A successful build also restarts it when configuration is
+already applied. If the build finishes first without configuration, its reload
+is skipped rather than deferred. Each stage fails independently; configuration
+errors take status priority, and refresh cancels both jobs before starting a new
+revision. A project-owned configuration bypasses both stages.
+
 ## 11. Asynchronous jobs
 
-Arcadia preparation commands, including `ya dump compile-commands` and
-`ya make`, must run asynchronously.
+Arcadia preparation commands, including `ya dump compile-commands`,
+`ya ide vscode`, and `ya make`, must run asynchronously.
 
 Default job configuration:
 
@@ -459,6 +473,10 @@ The clangd workflow uses `stage = "prepare"` while both jobs run and after both
 succeed. When only one job remains, or after a failure, it uses
 `stage = "compile_commands"` or `stage = "build"`. Dump errors take priority
 when both stages fail.
+
+The Python workflows use the same aggregation with their server-specific
+configuration stage and `stage = "build"`. Configuration errors take priority
+over build errors.
 
 ### 13.1 Statusline
 
