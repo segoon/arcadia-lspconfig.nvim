@@ -2,8 +2,9 @@ local Runtime = {}
 
 ---@class ArcadiaLspServerDefinition
 ---@field name string
----@field default_options table
+---@field default_options table|false
 ---@field allowed_options table<string, boolean>
+---@field conflicts? string[]
 ---@field create fun(api: table): ArcadiaLspWorkflow
 
 ---@class ArcadiaLspWorkflow
@@ -39,11 +40,13 @@ local function validate_definitions(definitions)
   for index, definition in ipairs(definitions) do
     vim.validate(('server definition %d'):format(index), definition, 'table')
     vim.validate(('server definition %d.name'):format(index), definition.name, 'string')
-    vim.validate(
-      ('server definition %s.default_options'):format(definition.name),
-      definition.default_options,
-      'table'
-    )
+    if definition.default_options ~= false then
+      vim.validate(
+        ('server definition %s.default_options'):format(definition.name),
+        definition.default_options,
+        'table'
+      )
+    end
     vim.validate(
       ('server definition %s.allowed_options'):format(definition.name),
       definition.allowed_options,
@@ -53,6 +56,12 @@ local function validate_definitions(definitions)
       ('server definition %s.create'):format(definition.name),
       definition.create,
       'function'
+    )
+    vim.validate(
+      ('server definition %s.conflicts'):format(definition.name),
+      definition.conflicts,
+      'table',
+      true
     )
     if by_name[definition.name] then
       error(('arcadia-lspconfig: duplicate server definition: %s'):format(definition.name), 3)
@@ -110,6 +119,17 @@ function Runtime.new(definitions)
           definition.allowed_options,
           ('servers.%s'):format(definition.name)
         )
+        for _, conflict in ipairs(definition.conflicts or {}) do
+          if result.servers[conflict] ~= false then
+            error(
+              ('arcadia-lspconfig: servers.%s and servers.%s cannot both be enabled'):format(
+                definition.name,
+                conflict
+              ),
+              3
+            )
+          end
+        end
       end
     end
     vim.validate('jobs.cancel_on_buff_exit', result.jobs.cancel_on_buff_exit, 'boolean')

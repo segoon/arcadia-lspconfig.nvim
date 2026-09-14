@@ -81,4 +81,26 @@ describe('injected server runtime', function()
       runtime.setup { servers = { unknown_server = false } }
     end, 'arcadia-lspconfig: unknown server option: unknown_server')
   end)
+
+  it('rejects conflicting enabled server definitions', function()
+    local function definition(name, conflict)
+      return {
+        name = name,
+        default_options = {},
+        allowed_options = {},
+        conflicts = { conflict },
+        create = function()
+          return {}
+        end,
+      }
+    end
+    local runtime = require('arcadia-lspconfig.runtime').new {
+      definition('first', 'second'),
+      definition('second', 'first'),
+    }
+
+    assert.has_error(function()
+      runtime.setup()
+    end, 'arcadia-lspconfig: servers.first and servers.second cannot both be enabled')
+  end)
 end)

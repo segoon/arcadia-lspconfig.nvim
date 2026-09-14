@@ -1,10 +1,13 @@
-local SERVER = 'pyright'
-local STAGE = 'pyright_config'
-
 ---@param api table
+---@param server? string
+---@param display_name? string
 ---@return table
-return function(api)
-  ---@class ArcadiaPyrightState
+return function(api, server, display_name)
+  local SERVER = server or 'pyright'
+  local DISPLAY_NAME = display_name or 'Pyright'
+  local STAGE = SERVER .. '_config'
+
+  ---@class ArcadiaPythonState
   ---@field arcadia_root string
   ---@field lsp_root string
   ---@field data_dir string
@@ -15,7 +18,7 @@ return function(api)
   ---@field revision integer
   ---@field active_project_dir? string
 
-  ---@type table<string, ArcadiaPyrightState>
+  ---@type table<string, ArcadiaPythonState>
   local states = {}
   local workflow = {}
 
@@ -41,7 +44,7 @@ return function(api)
   end
 
   ---@param context table
-  ---@return ArcadiaPyrightState
+  ---@return ArcadiaPythonState
   local function state_for(context)
     local state = states[context.lsp_root]
     if not state then
@@ -60,14 +63,14 @@ return function(api)
     return state
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@param status ArcadiaLspServerStatus
   local function publish(state, status)
     status.revision = state.revision
     api.status.set(state.lsp_root, SERVER, status)
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@return integer[]
   local function valid_buffers(state)
     local result = {}
@@ -82,21 +85,21 @@ return function(api)
     return result
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@return string
   local function manifest_path(state)
     return vim.fs.joinpath(state.data_dir, 'config.json')
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@return string
   local function project_config_path(state)
     return vim.fs.joinpath(state.lsp_root, 'pyrightconfig.json')
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@return boolean, string?
-  local function pyright_available(state)
+  local function server_available(state)
     local resolved = api.config.resolve(state.lsp_root, SERVER)
     if type(resolved.cmd) ~= 'table' or type(resolved.cmd[1]) ~= 'string' then
       return true
@@ -104,24 +107,25 @@ return function(api)
     if vim.fn.executable(resolved.cmd[1]) == 1 then
       return true
     end
-    return false, ('Pyright executable is not available: %s'):format(resolved.cmd[1])
+    return false, ('%s executable is not available: %s'):format(DISPLAY_NAME, resolved.cmd[1])
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@param extra_paths string[]
   local function configure(state, extra_paths)
+    local settings_key = SERVER == 'basedpyright' and 'basedpyright' or 'python'
     api.config.extend(state.lsp_root, SERVER, {
-      settings = { python = { analysis = { extraPaths = extra_paths } } },
+      settings = { [settings_key] = { analysis = { extraPaths = extra_paths } } },
     })
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@param restart boolean
   ---@return boolean, string?
   local function start_client(state, restart)
-    local available, message = pyright_available(state)
+    local available, message = server_available(state)
     if not available then
-      api.notify.warn_once(state.lsp_root, SERVER, 'missing_pyright', message)
+      api.notify.warn_once(state.lsp_root, SERVER, 'missing_' .. SERVER, message)
       publish(state, { state = 'warning', stage = STAGE, message = message })
       return false, message
     end
@@ -133,7 +137,7 @@ return function(api)
     return true
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@param code string
   ---@param message string
   local function fail(state, code, message)
@@ -149,7 +153,7 @@ return function(api)
     end
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@param result ArcadiaLspJobResult
   ---@param revision integer
   ---@param project_dir string
@@ -206,7 +210,7 @@ return function(api)
     end
   end
 
-  ---@param state ArcadiaPyrightState
+  ---@param state ArcadiaPythonState
   ---@return string
   local function job_key(state)
     return state.lsp_root .. '\0' .. SERVER
@@ -252,7 +256,7 @@ return function(api)
     publish(state, {
       state = 'waiting',
       stage = STAGE,
-      message = 'Generating Pyright import paths',
+      message = ('Generating %s import paths'):format(DISPLAY_NAME),
     })
     local _, start_error = api.jobs.start(job_key(state), {
       cmd = {
@@ -351,7 +355,8 @@ return function(api)
       local cached, cache_error = api.cache.read(manifest_path(state))
       if not cached then
         return nil,
-          ('no valid Pyright configuration is available: %s'):format(
+          ('no valid %s configuration is available: %s'):format(
+            DISPLAY_NAME,
             cache_error or manifest_path(state)
           )
       end
@@ -381,10 +386,10 @@ return function(api)
         message = ('Arcadia ya is not executable: %s'):format(state.ya_path),
       }
     end
-    local available, executable_error = pyright_available(state)
+    local available, executable_error = server_available(state)
     entries[#entries + 1] = {
       level = available and 'ok' or 'error',
-      message = available and 'Pyright command is available' or executable_error,
+      message = available and (DISPLAY_NAME .. ' command is available') or executable_error,
     }
     entries[#entries + 1] = {
       level = 'info',
@@ -394,7 +399,7 @@ return function(api)
     if vim.uv.fs_stat(project_config) then
       entries[#entries + 1] = {
         level = 'ok',
-        message = ('Project Pyright configuration: %s'):format(project_config),
+        message = ('Project %s configuration: %s'):format(DISPLAY_NAME, project_config),
       }
     else
       local manifest = manifest_path(state)
@@ -402,23 +407,24 @@ return function(api)
       if cached then
         entries[#entries + 1] = {
           level = 'ok',
-          message = ('Valid cached Pyright configuration: %s'):format(manifest),
+          message = ('Valid cached %s configuration: %s'):format(DISPLAY_NAME, manifest),
         }
       elseif vim.uv.fs_stat(manifest) then
         entries[#entries + 1] = {
           level = 'error',
-          message = ('Invalid cached Pyright configuration: %s'):format(cache_error),
+          message = ('Invalid cached %s configuration: %s'):format(DISPLAY_NAME, cache_error),
         }
       else
         entries[#entries + 1] = {
           level = 'info',
-          message = 'No cached Pyright configuration exists yet',
+          message = ('No cached %s configuration exists yet'):format(DISPLAY_NAME),
         }
       end
     end
     entries[#entries + 1] = {
       level = 'info',
-      message = ('Pyright preparation revision %d%s'):format(
+      message = ('%s preparation revision %d%s'):format(
+        DISPLAY_NAME,
         state.revision,
         state.running and ' is running' or ''
       ),
@@ -426,7 +432,7 @@ return function(api)
     return entries
   end
 
-  ---@return table<string, ArcadiaPyrightState>
+  ---@return table<string, ArcadiaPythonState>
   function workflow._states()
     return states
   end

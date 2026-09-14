@@ -2,7 +2,8 @@
 
 Arcadia-aware extensions for Neovim's native LSP configuration.
 
-The plugin supports C and C++ through `clangd` and Python through `pyright`.
+The plugin supports C and C++ through `clangd` and Python through `pyright` or
+`basedpyright`.
 For every applicable Arcadia `ya.make` root, clangd:
 
 1. immediately starts `<arcadia-root>/ya tool clangd` when a valid cached
@@ -70,6 +71,7 @@ require('arcadia-lspconfig').setup({
   servers = {
     clangd = {},
     pyright = {},
+    basedpyright = false,
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -81,8 +83,25 @@ require('arcadia-lspconfig').setup({
 })
 ```
 
-Set `servers.clangd = false` or `servers.pyright = false` to leave that server
-unmanaged by this plugin. The server tables have no options in the current release.
+Set a server to `false` to leave it unmanaged by this plugin. The server tables
+have no options in the current release. Pyright is enabled by default;
+BasedPyright users should select it explicitly and enable its nvim-lspconfig
+server:
+
+```lua
+require('arcadia-lspconfig').setup({
+  servers = {
+    pyright = false,
+    basedpyright = {},
+  },
+})
+vim.lsp.enable('basedpyright')
+```
+
+`pyright` and `basedpyright` are mutually exclusive, preventing two Python
+language servers from attaching to the same buffer. The latter runs
+`basedpyright-langserver` through nvim-lspconfig's standard configuration and
+places generated import paths in `basedpyright.analysis.extraPaths`.
 
 `cancel_on_buff_exit` drops a buffer's interest on `BufDelete` and
 `BufWipeout`. A shared job is terminated only after its last interested buffer
@@ -110,11 +129,12 @@ Each full LSP root gets isolated caches:
 stdpath('data')/arcadia-lspconfig/<sha256-of-lsp-root>/clangd/compile_commands.json
 ```
 
-Pyright stores a validated manifest and generated `.links` tree below the
-sibling `pyright/` directory. Existing `{lsp-root}/pyrightconfig.json` files take
-precedence. Without one, cached paths start Pyright immediately while
+The selected Python server stores a validated manifest and generated `.links`
+tree below its server-specific cache directory. Existing
+`{lsp-root}/pyrightconfig.json` files take precedence. Without one, cached paths
+start the server immediately while
 `ya ide vscode --py3 --no-pyright-config` refreshes them in the background.
-Without a valid cache, Pyright waits for generation; failures preserve the last
+Without a valid cache, the server waits for generation; failures preserve the last
 working cache and client.
 
 The preparation commands run concurrently:
@@ -215,8 +235,8 @@ Its event data is deliberately unspecified; consumers should call `status()` or
 - `:LspRefreshArcadia` reruns preparation for the current buffer.s applicable
   server.
 - `:ArcadiaLspStatus` displays structured status.
-- `:ArcadiaLspRestart` restarts the current root's applicable clangd or
-  Pyright client when its required configuration is available.
+- `:ArcadiaLspRestart` restarts the current root's applicable clangd, Pyright,
+  or BasedPyright client when its required configuration is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
   server-specific cache state, and the current workflow for the file from which
   it was invoked.
