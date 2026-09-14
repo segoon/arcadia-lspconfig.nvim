@@ -5,11 +5,15 @@
 `arcadia-lspconfig.nvim` extends Neovim LSP configurations for files that belong
 to Arcadia tier0 projects.
 
-The plugin configures a fixed initial set of LSP servers:
+The target language set is:
 
 - `clangd` for C and C++
 - `pyright` for Python
 - `gopls` for Go
+- (probably something else soon)
+
+The first implementation milestone ships the core and `clangd`. The other
+server modules remain planned work.
 
 Each server is implemented by a separate Lua submodule. A server module owns its
 complete Arcadia-specific workflow, including file relevance checks,
@@ -53,7 +57,7 @@ The first version will not:
 
 ## 4. Requirements and dependencies
 
-- Neovim 0.11 or newer is required.
+- Neovim 0.11.3 or newer is required.
 - `nvim-lspconfig` is a required dependency.
 - The plugin uses the native `vim.lsp.config()` and `vim.lsp.enable()` APIs.
 - External Arcadia tools such as `ya` are not installed by the plugin.
@@ -67,21 +71,18 @@ user explicitly chooses which configured servers Neovim should enable:
 
 ```lua
 vim.lsp.config("clangd", user_clangd_config)
-vim.lsp.config("pyright", user_pyright_config)
-vim.lsp.config("gopls", user_gopls_config)
 
 require("arcadia-lspconfig").setup()
 
 vim.lsp.enable("clangd")
-vim.lsp.enable("pyright")
-vim.lsp.enable("gopls")
 ```
 
 User LSP configuration must be applied before `setup()`. Enabling a managed
 server before `setup()` is unsupported because it may start a client before the
 plugin can install its configuration wrapper.
 
-All three built-in servers are configured by default. A server can be excluded:
+All implemented built-in servers are configured by default. A server can be
+excluded:
 
 ```lua
 require("arcadia-lspconfig").setup({
@@ -155,12 +156,10 @@ return function(api)
 end
 ```
 
-The initial modules are:
+The first implemented module is:
 
 ```text
 lua/arcadia-lspconfig/servers/clangd.lua
-lua/arcadia-lspconfig/servers/pyright.lua
-lua/arcadia-lspconfig/servers/gopls.lua
 ```
 
 A module owns:
@@ -176,8 +175,8 @@ A module owns:
 - Cleanup of partial generated artifacts.
 - Server-specific failures and recovery.
 
-The exact `clangd`, `pyright`, and `gopls` Arcadia workflows are intentionally
-left for their modules to define.
+The `pyright` and `gopls` Arcadia workflows remain intentionally undefined
+until their modules are implemented.
 
 ### 8.2 Core services
 
@@ -326,7 +325,7 @@ Default job configuration:
 
 ```lua
 jobs = {
-  cancel_on_buf_exit = true,
+  cancel_on_buff_exit = true,
   timeout_ms = nil,
 }
 ```
@@ -338,7 +337,7 @@ Jobs track the buffers interested in their result:
 
 - Closing a buffer removes its interest.
 - A shared job is cancelled only after no interested buffers remain when
-  `cancel_on_buf_exit` is enabled.
+  `cancel_on_buff_exit` is enabled.
 - Closing one of several interested buffers does not cancel shared work.
 - All pending jobs are cancelled when Neovim exits.
 - Modules clean up partial artifacts.
@@ -364,11 +363,9 @@ The initial option shape is:
 require("arcadia-lspconfig").setup({
   servers = {
     clangd = {},
-    pyright = {},
-    gopls = {},
   },
   jobs = {
-    cancel_on_buf_exit = true,
+    cancel_on_buff_exit = true,
     timeout_ms = nil,
   },
   log = {
@@ -377,7 +374,7 @@ require("arcadia-lspconfig").setup({
 })
 ```
 
-The three servers are present by default. Setting a server to `false` disables
+The implemented server is present by default. Setting it to `false` disables
 only this plugin's integration for that server.
 
 ## 13. Status and events
@@ -417,13 +414,13 @@ Modules may supply meaningful `stage` and `message` values.
 applicable to the buffer is waiting:
 
 ```text
-lsp⠋
-lsp⠙
-lsp⠹
+lsp ⠋
+lsp ⠙
+lsp ⠹
 ```
 
 The animation frame is derived from elapsed time. Multiple waiting servers still
-produce only one `lspX` indicator. The function returns an empty string when no
+produce only one `lsp X` indicator. The function returns an empty string when no
 applicable server is waiting, including when work is ready or the buffer is
 outside Arcadia.
 
@@ -508,7 +505,7 @@ Unit tests cover at least:
 - Deep merging of maps and replacement of lists.
 - Incremental configuration layers.
 - Serialization by LSP root/server.
-- Job interest tracking and `cancel_on_buf_exit` behavior.
+- Job interest tracking and `cancel_on_buff_exit` behavior.
 - Warning deduplication.
 - Structured status projection.
 - Animated and empty statusline rendering.
@@ -553,8 +550,8 @@ production language servers.
 - Session-start background invalidation may temporarily use existing artifacts;
   each module decides when those artifacts are sufficiently valid to start or
   restart its server.
-- Server-specific Arcadia commands, settings, and relevance rules are not defined
-  by this document and must be specified in their respective modules.
+- Python, Go, and future server-specific Arcadia commands, settings, and
+  relevance rules remain to be specified in their respective modules.
 
 ## 19. Initial implementation priorities
 
