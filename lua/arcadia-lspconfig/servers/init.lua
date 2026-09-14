@@ -30,6 +30,12 @@ local function create_basedpyright(api)
   return create_python_server(api, 'basedpyright', 'BasedPyright')
 end
 
+---@param api table
+---@return ArcadiaLspWorkflow
+local function create_ty(api)
+  return require 'arcadia-lspconfig.servers.ty'(api)
+end
+
 ---@type ArcadiaLspServerDefinition[]
 return {
   {
@@ -49,5 +55,12 @@ return {
     default_options = {},
     allowed_options = {},
     create = create_basedpyright,
+  },
+  {
+    name = 'ty',
+    default_options = {},
+    allowed_options = {},
+    route_commands = false,
+    create = create_ty,
   },
 }

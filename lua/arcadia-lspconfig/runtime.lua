@@ -4,6 +4,7 @@ local Runtime = {}
 ---@field name string
 ---@field default_options table
 ---@field allowed_options table<string, boolean>
+---@field route_commands? boolean
 ---@field create fun(api: table): ArcadiaLspWorkflow
 
 ---@class ArcadiaLspWorkflow
@@ -53,6 +54,12 @@ local function validate_definitions(definitions)
       ('server definition %s.create'):format(definition.name),
       definition.create,
       'function'
+    )
+    vim.validate(
+      ('server definition %s.route_commands'):format(definition.name),
+      definition.route_commands,
+      'boolean',
+      true
     )
     if by_name[definition.name] then
       error(('arcadia-lspconfig: duplicate server definition: %s'):format(definition.name), 3)
@@ -148,13 +155,15 @@ function Runtime.new(definitions)
     local filetype = vim.bo[bufnr].filetype
     local matches = {}
     for _, entry in ipairs(active) do
-      local base = require('arcadia-lspconfig.config').base(entry.definition.name)
-      if
-        vim.lsp.is_enabled(entry.definition.name)
-        and base
-        and vim.tbl_contains(base.filetypes or {}, filetype)
-      then
-        matches[#matches + 1] = entry
+      if entry.definition.route_commands ~= false then
+        local base = require('arcadia-lspconfig.config').base(entry.definition.name)
+        if
+          vim.lsp.is_enabled(entry.definition.name)
+          and base
+          and vim.tbl_contains(base.filetypes or {}, filetype)
+        then
+          matches[#matches + 1] = entry
+        end
       end
     end
     if #matches == 1 then

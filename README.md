@@ -3,7 +3,8 @@
 Arcadia-aware extensions for Neovim's native LSP configuration.
 
 The plugin supports C and C++ through `clangd` and Python through `pyright` or
-`basedpyright`.
+`basedpyright`. It suppresses `ty` inside Arcadia so a globally enabled ty
+server does not compete with the Arcadia Python server.
 For every applicable Arcadia `ya.make` root, clangd:
 
 1. immediately starts `<arcadia-root>/ya tool clangd` when a valid cached
@@ -72,6 +73,7 @@ require('arcadia-lspconfig').setup({
     clangd = {},
     pyright = {},
     basedpyright = {},
+    ty = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -96,6 +98,11 @@ Use `vim.lsp.enable('pyright')` instead to activate Pyright. BasedPyright runs
 receives generated import paths in `basedpyright.analysis.extraPaths`. If both
 Python servers are enabled, both may attach, but refresh, restart, and health
 report the ambiguous selection instead of choosing one silently.
+
+`ty` is suppressed for every buffer below an Arcadia `.arc/HEAD`, including
+buffers without a `ya.make` ancestor. A globally enabled ty server continues to
+work normally outside Arcadia. Set `servers.ty = false` if this plugin should
+leave ty entirely unmanaged.
 
 `cancel_on_buff_exit` drops a buffer's interest on `BufDelete` and
 `BufWipeout`. A shared job is terminated only after its last interested buffer
