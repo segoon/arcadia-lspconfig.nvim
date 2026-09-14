@@ -72,6 +72,19 @@ local function install_server(server, workflow)
   end
   config.capture(server, base)
   vim.lsp.config(server, {
+    -- Neovim validates cmd before calling root_dir. A functional wrapper lets
+    -- Arcadia replace a missing system executable with checkout-local ya while
+    -- preserving the original command for buffers outside Arcadia.
+    cmd = function(dispatchers, client_config)
+      if type(base.cmd) == 'function' then
+        return base.cmd(dispatchers, client_config)
+      end
+      return vim.lsp.rpc.start(base.cmd, dispatchers, {
+        cwd = client_config.cmd_cwd,
+        env = client_config.cmd_env,
+        detached = client_config.detached,
+      })
+    end,
     root_dir = function(bufnr, on_dir)
       local context = workflow.context(bufnr)
       if context then

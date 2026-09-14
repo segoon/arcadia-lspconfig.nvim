@@ -186,7 +186,7 @@ Its event data is deliberately unspecified; consumers should call `status()` or
 - `:ArcadiaLspRestart` restarts the current root's clangd with the last
   successful configuration.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
-  cache state, and the current workflow.
+  cache state, and the current workflow for the file from which it was invoked.
 
 ## Development
 
@@ -205,4 +205,3 @@ See [docs/PROJECT.md](docs/PROJECT.md) for architecture and project boundaries.
 ## License
 
 MIT
-

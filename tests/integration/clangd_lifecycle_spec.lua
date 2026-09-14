@@ -29,7 +29,7 @@ describe('clangd lifecycle', function()
 
     if not setup_done then
       vim.lsp.config('clangd', {
-        cmd = { 'false' },
+        cmd = { 'arcadia-lspconfig-system-clangd-does-not-exist' },
         filetypes = { 'cpp' },
         root_markers = { '.git' },
       })
@@ -38,6 +38,7 @@ describe('clangd lifecycle', function()
         log = { level = 'off' },
       }
       vim.lsp.enable 'clangd'
+      assert.are.equal('function', type(vim.lsp.config.clangd.cmd))
       setup_done = true
     end
   end)

@@ -7,6 +7,21 @@ local function version_ok()
   return version.major > 0 or version.minor > 11 or (version.minor == 11 and version.patch >= 3)
 end
 
+---@return integer
+local function project_buffer()
+  local current = vim.api.nvim_get_current_buf()
+  local name = vim.api.nvim_buf_get_name(current)
+  if not vim.startswith(name, 'health://') then
+    return current
+  end
+
+  local alternate = vim.fn.bufnr '#'
+  if alternate > 0 and vim.api.nvim_buf_is_valid(alternate) then
+    return alternate
+  end
+  return current
+end
+
 function M.check()
   health.start 'arcadia-lspconfig.nvim'
 
@@ -23,7 +38,9 @@ function M.check()
     health.error 'nvim-lspconfig is not available on runtimepath'
   end
 
-  local bufnr = vim.api.nvim_get_current_buf()
+  -- :checkhealth runs checks after switching to its health:// result buffer.
+  -- The alternate buffer is the file from which the command was invoked.
+  local bufnr = project_buffer()
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == '' then
     health.info 'The current buffer has no file path; project checks were skipped'
