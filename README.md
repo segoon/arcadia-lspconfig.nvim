@@ -3,11 +3,9 @@
 Arcadia-aware extensions for Neovim's native LSP configuration.
 You don't have to additionally configure LSP servers for Arcadia, it should "just work" out of the box after LSP server is installed.
 
-
 The plugin supports:
 - C and C++ through `clangd`
 - Python through `pyright` or `basedpyright` (and disables `ty`)
-
 
 # Requirements
 
@@ -48,6 +46,8 @@ clangd starts the following commands in background:
 
 After that, LSP server is restarted.
 
+Both `compile_commands.json` and codegen results are stored in `~/.local/share/nvim/arcadia-lspconfig/<hash>/clangd/`.
+
 ## Python
 
 pyright / basedpyright start the following commands in background:
@@ -56,6 +56,8 @@ pyright / basedpyright start the following commands in background:
 2. `<arcadia-root>/ya make --add-result=.py --replace-result`
 
 After that, LSP server is restarted.
+
+vscode project and codegen results are stored in `~/.local/share/nvim/arcadia-lspconfig/<hash>/pyright/`.
 
 # Advanced configuration
 
