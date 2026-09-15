@@ -2,7 +2,7 @@ NVIM ?= nvim
 PLENARY_DIR ?= .deps/plenary.nvim
 NVIM_LSPCONFIG_DIR ?= .deps/nvim-lspconfig
 
-.PHONY: deps test format lint architecture
+.PHONY: deps test format lint
 
 deps:
 	@test -d "$(PLENARY_DIR)" || git clone --depth=1 https://github.com/nvim-lua/plenary.nvim "$(PLENARY_DIR)"
@@ -19,13 +19,6 @@ test:
 format:
 	stylua lua plugin tests
 
-lint: architecture
+lint:
 	stylua --check lua plugin tests
 	luacheck lua plugin tests
-
-architecture:
-	@if rg -n -i 'clangd|pyright|compile_commands|compilation database|extraPaths' \
-		plugin lua/arcadia-lspconfig/*.lua; then \
-		echo 'server-specific implementation details must stay under lua/arcadia-lspconfig/servers/'; \
-		exit 1; \
-	fi

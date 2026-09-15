@@ -218,14 +218,14 @@ function Runtime.new(definitions)
   end
 
   local function create_commands()
-    vim.api.nvim_create_user_command('LspRefreshArcadia', function()
+    vim.api.nvim_create_user_command('LspArcadiaRefresh', function()
       local ok, err = M.refresh(0)
       if not ok then
         vim.notify(err, vim.log.levels.WARN, { title = 'arcadia-lspconfig.nvim' })
       end
     end, { desc = 'Refresh Arcadia LSP preparation for the current buffer' })
 
-    vim.api.nvim_create_user_command('ArcadiaLspStatus', function()
+    vim.api.nvim_create_user_command('LspArcadiaStatus', function()
       local value = M.status(0)
       vim.notify(
         value and vim.inspect(value) or 'No Arcadia LSP state for the current buffer',
@@ -236,7 +236,7 @@ function Runtime.new(definitions)
       )
     end, { desc = 'Show Arcadia LSP status for the current buffer' })
 
-    vim.api.nvim_create_user_command('ArcadiaLspRestart', function()
+    vim.api.nvim_create_user_command('LspArcadiaRestart', function()
       local workflow, _, selection_error = workflow_for_buffer(vim.api.nvim_get_current_buf())
       if not workflow then
         vim.notify(

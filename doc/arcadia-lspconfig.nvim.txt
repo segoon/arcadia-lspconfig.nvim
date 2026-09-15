@@ -210,16 +210,16 @@ data is not a public interface.
 ==============================================================================
 COMMANDS                                        *arcadia-lspconfig-commands*
 
-                                              *:LspRefreshArcadia*
-:LspRefreshArcadia
+                                              *:LspArcadiaRefresh*
+:LspArcadiaRefresh
     Rerun preparation for the current buffer's applicable server.
 
-                                              *:ArcadiaLspStatus*
-:ArcadiaLspStatus
+                                              *:LspArcadiaStatus*
+:LspArcadiaStatus
     Display structured status for the current buffer.
 
-                                              *:ArcadiaLspRestart*
-:ArcadiaLspRestart
+                                              *:LspArcadiaRestart*
+:LspArcadiaRestart
     Restart the applicable clangd, Pyright, or BasedPyright client for the
     current buffer's Arcadia LSP root. Refuse when its required configuration
     is unavailable.
