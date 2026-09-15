@@ -19,13 +19,7 @@ The plugin does not install language servers or Arcadia tools.
 
 # How to start
 
-1. Setup this plugin
-2. Install LSP servers (e.g. via [mason-lspconfig](https://github.com/mason-org/mason-lspconfig.nvim))
-3. Call `vim.lsp.config(...)`, if you want
-3. `vim.lsp.enable(...)` for LSP servers (`clangd`, `basedpyright`)
-
-Minimal config, with lazy.nvim:
-
+1. Install this plugin, e.g. via lazy.nvim:
 ```lua
 {
   'segoon/arcadia-lspconfig.nvim',
@@ -35,15 +29,10 @@ Minimal config, with lazy.nvim:
   opts = {}
 }
 ```
-
-Apply ordinary clangd and Pyright customizations before setup. The user remains
-responsible for enabling each server:
+2. Install LSP servers, e.g. via [mason](https://github.com/mason-org/mason.nvim)
+3. Call `vim.lsp.enable(...)` for LSP servers:
 
 ```lua
-vim.lsp.config('clangd', {
-  capabilities = my_capabilities,
-})
-
 vim.lsp.enable('clangd')
 vim.lsp.enable('basedpyright')
 ```
