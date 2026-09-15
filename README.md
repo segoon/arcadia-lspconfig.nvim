@@ -6,14 +6,18 @@ You don't have to additionally configure LSP servers for Arcadia, it should "jus
 The plugin supports:
 - C and C++ through `clangd`
 - Python through `pyright` or `basedpyright` (and disables `ty`)
+- `ya.make` files through the automatically managed `ya-make-lsp`
 
 # Requirements
 
 - Neovim 0.11.3 or newer
 - [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)
-- An Arcadia checkout with an executable `<arcadia-root>/ya`
+- An Arcadia checkout with executable `ya` and `arc` commands
+- Node.js and npm for building `ya-make-lsp`
 
-The plugin does not install language servers or Arcadia tools.
+The plugin does not install Arcadia tools or general-purpose language servers.
+It does automatically export, build, and update `ya-make-lsp` from Arcadia
+trunk.
 
 # How to start
 
@@ -34,6 +38,9 @@ The plugin does not install language servers or Arcadia tools.
 vim.lsp.enable('clangd')
 vim.lsp.enable('basedpyright')
 ```
+
+`ya-make-lsp` is enabled automatically. Opening an Arcadia `ya.make` file
+installs and starts it; no separate `vim.lsp.enable()` call is needed.
 
 # LSP settings
 
@@ -63,6 +70,25 @@ After that, LSP server is restarted.
 
 vscode project and codegen results are stored in `~/.local/share/nvim/arcadia-lspconfig/<hash>/pyright/`.
 
+## ya.make
+
+Opening a file named exactly `ya.make` sets the `yamake` filetype and enables
+`ya-make-lsp`. On first use the plugin runs:
+
+```text
+arc log -n1 trunk --oneline devtools/ide/vscode-yandex-arc/ya-make-lsp
+arc export trunk devtools/ide/vscode-yandex-arc/ya-make-lsp --to <data-dir>
+npm install
+npm run build
+```
+
+The npm commands run in the exported directory, never in the Arcadia checkout.
+The installation is stored at
+`stdpath("data")/arcadia-lspconfig/ya-make-lsp/`. Later opens start the cached
+server immediately, check the trunk revision in the background, and rebuild and
+restart only after the revision changes. Failed updates restore the last working
+installation.
+
 # Advanced configuration
 
 Defaults:
@@ -77,6 +103,8 @@ require('arcadia-lspconfig').setup({
     basedpyright = { codegen = true },
     -- use `ty = false` to avoid disabling ty (it doesn't work well with arcadia python)
     ty = {},
+    -- automatically installed and enabled for exact ya.make files
+    ['ya-make-lsp'] = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -161,7 +189,7 @@ Its event data is deliberately unspecified; consumers should call `status()` or
   server.
 - `:LspArcadiaStatus` displays structured status.
 - `:LspArcadiaRestart` restarts the current root's applicable clangd, Pyright,
-  or BasedPyright client when its required configuration is available.
+  BasedPyright, or ya-make-lsp client when its required configuration is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
   server-specific cache state, and the current workflow for the file from which
   it was invoked.

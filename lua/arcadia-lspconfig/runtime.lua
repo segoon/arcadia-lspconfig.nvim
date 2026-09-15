@@ -5,6 +5,8 @@ local Runtime = {}
 ---@field default_options table
 ---@field allowed_options table<string, string>
 ---@field route_commands? boolean
+---@field auto_enable? boolean
+---@field config? vim.lsp.Config
 ---@field create fun(api: table): ArcadiaLspWorkflow
 
 ---@class ArcadiaLspWorkflow
@@ -66,6 +68,18 @@ local function validate_definitions(definitions)
       ('server definition %s.route_commands'):format(definition.name),
       definition.route_commands,
       'boolean',
+      true
+    )
+    vim.validate(
+      ('server definition %s.auto_enable'):format(definition.name),
+      definition.auto_enable,
+      'boolean',
+      true
+    )
+    vim.validate(
+      ('server definition %s.config'):format(definition.name),
+      definition.config,
+      'table',
       true
     )
     if by_name[definition.name] then
@@ -157,8 +171,8 @@ function Runtime.new(definitions)
     for _, definition in ipairs(definitions) do
       if validated_options.servers[definition.name] ~= false then
         local config_file = ('lsp/%s.lua'):format(definition.name)
-        if #vim.api.nvim_get_runtime_file(config_file, false) == 0 then
-          error(('arcadia-lspconfig requires nvim-lspconfig %s'):format(config_file), 3)
+        if not definition.config and #vim.api.nvim_get_runtime_file(config_file, false) == 0 then
+          error(('arcadia-lspconfig requires an LSP configuration %s'):format(config_file), 3)
         end
       end
     end
@@ -203,9 +217,12 @@ function Runtime.new(definitions)
   local function install_server(definition, workflow)
     local config = require 'arcadia-lspconfig.config'
     local server = definition.name
+    if definition.config then
+      vim.lsp.config(server, definition.config)
+    end
     local base = vim.lsp.config[server]
     if not base then
-      error(('arcadia-lspconfig: nvim-lspconfig has no %s configuration'):format(server), 3)
+      error(('arcadia-lspconfig: no %s LSP configuration is available'):format(server), 3)
     end
     config.capture(server, base)
     vim.lsp.config(server, {
@@ -301,6 +318,9 @@ function Runtime.new(definitions)
         workflows[definition.name] = workflow
         active[#active + 1] = { definition = definition, workflow = workflow }
         install_server(definition, workflow)
+        if definition.auto_enable then
+          vim.lsp.enable(definition.name)
+        end
       end
     end
     create_commands()

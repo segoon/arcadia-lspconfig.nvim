@@ -8,6 +8,12 @@ function M.data(lsp_root, server)
   return vim.fs.joinpath(vim.fn.stdpath 'data', 'arcadia-lspconfig', hash, server)
 end
 
+---@param server string
+---@return string
+function M.shared(server)
+  return vim.fs.joinpath(vim.fn.stdpath 'data', 'arcadia-lspconfig', server)
+end
+
 ---@param path string
 ---@return boolean, string?
 function M.ensure(path)
