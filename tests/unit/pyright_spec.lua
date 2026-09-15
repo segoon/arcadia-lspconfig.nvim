@@ -316,4 +316,39 @@ describe('Pyright workflow', function()
     assert.matches('no valid Pyright configuration', message)
     assert.are.equal(0, #restarts)
   end)
+
+  it('skips Pyright codegen when disabled and stays disabled on refresh', function()
+    api.options = { servers = { pyright = { codegen = false } } }
+    local workflow = require 'arcadia-lspconfig.servers.pyright'(api)
+
+    assert.is_true(workflow.activate(bufnr))
+    assert.are.equal(1, #jobs)
+    assert.are.equal('ide', jobs[1].cmd[2])
+    assert.are.equal('pyright_config', statuses[#statuses].stage)
+    complete_configuration(jobs[1], { '/generated' })
+
+    assert.are.equal('ready', statuses[#statuses].state)
+    assert.are.equal(1, #restarts)
+    assert.is_true(workflow.refresh(bufnr))
+    assert.are.equal(2, #jobs)
+    assert.are.equal('ide', jobs[2].cmd[2])
+  end)
+
+  it('applies the codegen option independently to BasedPyright', function()
+    api.options = {
+      servers = {
+        pyright = { codegen = true },
+        basedpyright = { codegen = false },
+      },
+    }
+    local workflow =
+      require 'arcadia-lspconfig.servers.pyright'(api, 'basedpyright', 'BasedPyright')
+
+    assert.is_true(workflow.activate(bufnr))
+    assert.are.equal(1, #jobs)
+    complete_configuration(jobs[1], { '/based' })
+
+    assert.are.equal('ready', statuses[#statuses].state)
+    assert.are.same({ '/based' }, patches[1].settings.basedpyright.analysis.extraPaths)
+  end)
 end)

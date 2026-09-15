@@ -3,6 +3,11 @@ local SERVER = 'clangd'
 ---@param api table
 ---@return table
 return function(api)
+  local codegen_enabled = not api.options
+    or not api.options.servers
+    or not api.options.servers[SERVER]
+    or api.options.servers[SERVER].codegen ~= false
+
   ---@class ArcadiaClangdStageState
   ---@field state string
   ---@field message? string
@@ -388,13 +393,17 @@ return function(api)
 
     state.stages = {
       compile_commands = { state = 'waiting', message = 'Generating compile commands' },
-      build = { state = 'waiting', message = 'Building C++ results' },
+      build = codegen_enabled and { state = 'waiting', message = 'Building C++ results' }
+        or { state = 'ready' },
     }
     update_status(state)
     local temporary_path =
       vim.fs.joinpath(state.data_dir, ('compile_commands.json.tmp.%d'):format(revision))
     local dump_started, dump_error = start_dump(state, context.bufnr, revision, temporary_path)
-    local build_started, build_error = start_build(state, context.bufnr, revision)
+    local build_started, build_error
+    if codegen_enabled then
+      build_started, build_error = start_build(state, context.bufnr, revision)
+    end
     if dump_started or build_started then
       return true
     end

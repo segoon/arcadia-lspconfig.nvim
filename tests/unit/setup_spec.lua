@@ -6,12 +6,21 @@ describe('setup', function()
       plugin.setup { jobs = { cancel_on_buf_exit = true } }
     end, 'arcadia-lspconfig: unknown jobs option: cancel_on_buf_exit')
 
-    plugin.setup { servers = { clangd = false }, log = { level = 'off' } }
+    assert.has_error(function()
+      plugin.setup { servers = { clangd = { codegen = 'no' } } }
+    end, 'servers.clangd.codegen: expected boolean, got string')
+
+    plugin.setup {
+      servers = { clangd = false, pyright = { codegen = false } },
+      log = { level = 'off' },
+    }
     assert.is_true(plugin._state().configured)
     assert.is_nil(plugin._state().workflows.clangd)
     assert.is_not_nil(plugin._state().workflows.pyright)
     assert.is_not_nil(plugin._state().workflows.basedpyright)
     assert.is_not_nil(plugin._state().workflows.ty)
+    assert.is_false(plugin._state().options.servers.pyright.codegen)
+    assert.is_true(plugin._state().options.servers.basedpyright.codegen)
     for _, command in ipairs {
       'LspArcadiaRefresh',
       'LspArcadiaStatus',

@@ -51,9 +51,9 @@ Default options: >lua
 
   require('arcadia-lspconfig').setup({
     servers = {
-      clangd = {},
-      pyright = {},
-      basedpyright = {},
+      clangd = { codegen = true },
+      pyright = { codegen = true },
+      basedpyright = { codegen = true },
       ty = {},
     },
     jobs = {
@@ -67,19 +67,22 @@ Default options: >lua
 <
                                       *arcadia-lspconfig-servers-clangd*
 servers.clangd ~
-    Set to false to disable this plugin's clangd integration. The table has no
-    configurable fields in the current release.
+    Set to false to disable this plugin's clangd integration. Set codegen to
+    false to skip the ya make --replace-result stage while continuing to
+    generate compile_commands.json. codegen defaults to true.
 
                                       *arcadia-lspconfig-servers-pyright*
 servers.pyright ~
-    Set to false to disable this plugin's Pyright integration. The table has no
-    configurable fields in the current release.
+    Set to false to disable this plugin's Pyright integration. Set codegen to
+    false to skip the ya make --replace-result stage while continuing to
+    generate import paths with ya ide vscode. codegen defaults to true.
 
                                 *arcadia-lspconfig-servers-basedpyright*
 servers.basedpyright ~
-    Set to false to disable this plugin's BasedPyright integration. The table
-    has no configurable fields in the current release. Managing both Python
-    servers is supported; select which one is active with |vim.lsp.enable()|.
+    Set to false to disable this plugin's BasedPyright integration. Set codegen
+    to false to skip the ya make --replace-result stage while continuing to
+    generate import paths with ya ide vscode. codegen defaults to true.
+    Managing both Python servers is supported; select which one is active with |vim.lsp.enable()|.
     BasedPyright uses nvim-lspconfig's basedpyright configuration and its
     basedpyright-langserver command. Generated import paths are applied as
     basedpyright.analysis.extraPaths.

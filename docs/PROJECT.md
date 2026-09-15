@@ -343,6 +343,9 @@ pipeline:
 4. After a successful build, restart clangd only when a valid database is
    already available. Do not replay a skipped restart if make finishes first.
 
+The per-server `codegen` option defaults to `true`. When `false`, omit the
+`ya make` stage; compile-command generation alone determines preparation readiness.
+
 No Arcadia or system clangd is started for an applicable buffer without a valid
 database. Failure in either stage does not cancel the other stage. Existing
 valid clients and databases remain active; a failed initial dump leaves clangd
@@ -365,7 +368,9 @@ restarts the server. A successful build also restarts it when configuration is
 already applied. If the build finishes first without configuration, its reload
 is skipped rather than deferred. Each stage fails independently; configuration
 errors take status priority, and refresh cancels both jobs before starting a new
-revision. A project-owned configuration bypasses both stages.
+revision. The per-server `codegen` option defaults to `true`. When `false`, omit
+the `ya make` stage; configuration generation alone determines readiness. A
+project-owned configuration bypasses both stages.
 
 ## 11. Asynchronous jobs
 
@@ -413,9 +418,9 @@ The initial option shape is:
 ```lua
 require("arcadia-lspconfig").setup({
   servers = {
-    clangd = {},
-    pyright = {},
-    basedpyright = {},
+    clangd = { codegen = true },
+    pyright = { codegen = true },
+    basedpyright = { codegen = true },
     ty = {},
   },
   jobs = {
