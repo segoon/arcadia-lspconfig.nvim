@@ -12,7 +12,20 @@ describe('setup', function()
     assert.is_not_nil(plugin._state().workflows.pyright)
     assert.is_not_nil(plugin._state().workflows.basedpyright)
     assert.is_not_nil(plugin._state().workflows.ty)
-    assert.are.equal(2, vim.fn.exists ':LspRefreshArcadia')
+    for _, command in ipairs {
+      'LspArcadiaRefresh',
+      'LspArcadiaStatus',
+      'LspArcadiaRestart',
+    } do
+      assert.are.equal(2, vim.fn.exists(':' .. command))
+    end
+    for _, command in ipairs {
+      'LspRefreshArcadia',
+      'ArcadiaLspStatus',
+      'ArcadiaLspRestart',
+    } do
+      assert.are.equal(0, vim.fn.exists(':' .. command))
+    end
     assert.has_error(function()
       plugin.setup()
     end, 'arcadia-lspconfig.setup() may only be called once')

@@ -1,13 +1,15 @@
 # arcadia-lspconfig.nvim
 
 Arcadia-aware extensions for Neovim's native LSP configuration.
+You don't have to additionally configure LSP servers for Arcadia, it should "just work" out of the box after LSP server is installed.
+
 
 The plugin supports:
 - C and C++ through `clangd`
 - Python through `pyright` or `basedpyright` (and disables `ty`)
 
 
-## Requirements
+# Requirements
 
 - Neovim 0.11.3 or newer
 - [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)
@@ -15,7 +17,12 @@ The plugin supports:
 
 The plugin does not install language servers or Arcadia tools.
 
-## Installation
+# How to start
+
+1. Setup this plugin
+2. Install LSP servers (e.g. via [mason-lspconfig](https://github.com/mason-org/mason-lspconfig.nvim))
+3. Call `vim.lsp.config(...)`, if you want
+3. `vim.lsp.enable(...)` for LSP servers (`clangd`, `basedpyright`)
 
 Minimal config, with lazy.nvim:
 
@@ -38,7 +45,7 @@ vim.lsp.config('clangd', {
 })
 
 vim.lsp.enable('clangd')
-vim.lsp.enable('pyright')
+vim.lsp.enable('basedpyright')
 ```
 
 # LSP settings
@@ -154,10 +161,10 @@ Its event data is deliberately unspecified; consumers should call `status()` or
 
 ## Commands
 
-- `:LspRefreshArcadia` reruns preparation for the current buffer.s applicable
+- `:LspArcadiaRefresh` reruns preparation for the current buffer.s applicable
   server.
-- `:ArcadiaLspStatus` displays structured status.
-- `:ArcadiaLspRestart` restarts the current root's applicable clangd, Pyright,
+- `:LspArcadiaStatus` displays structured status.
+- `:LspArcadiaRestart` restarts the current root's applicable clangd, Pyright,
   or BasedPyright client when its required configuration is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
   server-specific cache state, and the current workflow for the file from which

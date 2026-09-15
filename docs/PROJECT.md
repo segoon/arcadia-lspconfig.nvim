@@ -509,10 +509,10 @@ use the event only as a redraw signal, then call `status()` or `statusline()`.
 
 The plugin provides:
 
-- `:LspRefreshArcadia` to cancel and restart the workflow selected by the current
+- `:LspArcadiaRefresh` to cancel and restart the workflow selected by the current
   buffer's LSP root and applicable server.
-- `:ArcadiaLspStatus` to show the current buffer's Arcadia LSP status.
-- `:ArcadiaLspRestart` to restart the current buffer's root/server client using
+- `:LspArcadiaStatus` to show the current buffer's Arcadia LSP status.
+- `:LspArcadiaRestart` to restart the current buffer's root/server client using
   the latest successful configuration.
 
 The commands operate on the current buffer. There are no bang or all-roots
