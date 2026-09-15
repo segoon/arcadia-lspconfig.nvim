@@ -40,20 +40,20 @@ end
 return {
   {
     name = 'clangd',
-    default_options = {},
-    allowed_options = {},
+    default_options = { codegen = true },
+    allowed_options = { codegen = 'boolean' },
     create = create_clangd,
   },
   {
     name = 'pyright',
-    default_options = {},
-    allowed_options = {},
+    default_options = { codegen = true },
+    allowed_options = { codegen = 'boolean' },
     create = create_pyright,
   },
   {
     name = 'basedpyright',
-    default_options = {},
-    allowed_options = {},
+    default_options = { codegen = true },
+    allowed_options = { codegen = 'boolean' },
     create = create_basedpyright,
   },
   {

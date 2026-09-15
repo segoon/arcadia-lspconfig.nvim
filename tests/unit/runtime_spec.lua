@@ -7,7 +7,7 @@ describe('injected server runtime', function()
     local definition = {
       name = 'fixture_server',
       default_options = { feature = true },
-      allowed_options = { feature = true },
+      allowed_options = { feature = 'boolean' },
       create = function(api)
         created_with = api
         return {
@@ -82,6 +82,21 @@ describe('injected server runtime', function()
     assert.has_error(function()
       runtime.setup { servers = { unknown_server = false } }
     end, 'arcadia-lspconfig: unknown server option: unknown_server')
+  end)
+
+  it('validates declared server option types', function()
+    local definition = {
+      name = 'fixture_server',
+      default_options = { feature = true },
+      allowed_options = { feature = 'boolean' },
+      create = function()
+        return {}
+      end,
+    }
+    local runtime = require('arcadia-lspconfig.runtime').new { definition }
+    assert.has_error(function()
+      runtime.setup { servers = { fixture_server = { feature = 'yes' } } }
+    end, 'servers.fixture_server.feature: expected boolean, got string')
   end)
 
   it('routes overlapping filetypes by enabled server and reports ambiguity', function()

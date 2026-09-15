@@ -30,7 +30,7 @@ describe('BasedPyright lifecycle', function()
       root_markers = { '.git' },
     })
     require('arcadia-lspconfig').setup {
-      servers = { clangd = false },
+      servers = { clangd = false, basedpyright = { codegen = false } },
       jobs = { cancel_on_buff_exit = true, timeout_ms = 5000 },
       log = { level = 'off' },
     }
@@ -48,12 +48,11 @@ describe('BasedPyright lifecycle', function()
     helpers.cleanup(sandbox)
   end)
 
-  it('generates import paths and starts BasedPyright', function()
+  it('generates import paths without codegen and starts BasedPyright', function()
     local root = sandbox .. '/checkout'
     helpers.write(root .. '/.arc/HEAD')
     helpers.write(root .. '/project/ya.make')
     helpers.write(root .. '/project/main.py', 'value = 1')
-    helpers.write(root .. '/project/.fake_ya_require_parallel')
     local fixture = vim.fs.joinpath(vim.fn.getcwd(), 'tests', 'fixtures', 'fake_ya.py')
     vim.fn.writefile(vim.fn.readfile(fixture), root .. '/ya')
     vim.fn.setfperm(root .. '/ya', 'rwxr-xr-x')
@@ -68,7 +67,7 @@ describe('BasedPyright lifecycle', function()
       return value
         and value.servers.basedpyright.state == 'ready'
         and count_lines(log, 'ide:') == 1
-        and count_lines(log, 'make:') == 1
+        and count_lines(log, 'make:') == 0
         and count_lines(log, 'basedpyright:') >= 1
         and #vim.lsp.get_clients { bufnr = bufnr, name = 'basedpyright' } == 1
     end, 20))

@@ -6,7 +6,7 @@ return function(api, server, display_name)
   local SERVER = server or 'pyright'
   local DISPLAY_NAME = display_name or 'Pyright'
   local CONFIG_STAGE = SERVER .. '_config'
-
+  local codegen_enabled = not api.options or api.options.servers[SERVER].codegen ~= false
   ---@class ArcadiaPythonStageState
   ---@field state string
   ---@field message? string
@@ -25,7 +25,6 @@ return function(api, server, display_name)
   ---@type table<string, ArcadiaPythonState>
   local states = {}
   local workflow = {}
-
   ---@param bufnr integer
   ---@return table?
   function workflow.context(bufnr)
@@ -46,7 +45,6 @@ return function(api, server, display_name)
       data_dir = api.paths.data(roots.lsp_root, SERVER),
     }
   end
-
   ---@param context table
   ---@return ArcadiaPythonState
   local function state_for(context)
@@ -421,7 +419,8 @@ return function(api, server, display_name)
         state = 'waiting',
         message = ('Generating %s import paths'):format(DISPLAY_NAME),
       },
-      build = { state = 'waiting', message = 'Building Python results' },
+      build = codegen_enabled and { state = 'waiting', message = 'Building Python results' }
+        or { state = 'ready' },
     }
     update_status(state)
 
@@ -435,7 +434,10 @@ return function(api, server, display_name)
       configuration_error = project_error
       fail_stage(state, 'configuration', 'data_directory', project_error)
     end
-    local build_started, build_error = start_build(state, context.bufnr, revision)
+    local build_started, build_error
+    if codegen_enabled then
+      build_started, build_error = start_build(state, context.bufnr, revision)
+    end
     if configuration_started or build_started then
       return true
     end

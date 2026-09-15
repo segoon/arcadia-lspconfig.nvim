@@ -3,7 +3,7 @@ local Runtime = {}
 ---@class ArcadiaLspServerDefinition
 ---@field name string
 ---@field default_options table
----@field allowed_options table<string, boolean>
+---@field allowed_options table<string, string>
 ---@field route_commands? boolean
 ---@field create fun(api: table): ArcadiaLspWorkflow
 
@@ -50,6 +50,13 @@ local function validate_definitions(definitions)
       definition.allowed_options,
       'table'
     )
+    for option, expected_type in pairs(definition.allowed_options) do
+      vim.validate(
+        ('server definition %s.allowed_options.%s'):format(definition.name, option),
+        expected_type,
+        'string'
+      )
+    end
     vim.validate(
       ('server definition %s.create'):format(definition.name),
       definition.create,
@@ -117,6 +124,14 @@ function Runtime.new(definitions)
           definition.allowed_options,
           ('servers.%s'):format(definition.name)
         )
+        for option, expected_type in pairs(definition.allowed_options) do
+          vim.validate(
+            ('servers.%s.%s'):format(definition.name, option),
+            server_options[option],
+            expected_type,
+            true
+          )
+        end
       end
     end
     vim.validate('jobs.cancel_on_buff_exit', result.jobs.cancel_on_buff_exit, 'boolean')

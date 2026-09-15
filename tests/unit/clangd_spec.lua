@@ -269,4 +269,22 @@ describe('clangd workflow', function()
     assert.are.equal(0, #starts)
     assert.are.equal(0, #restarts)
   end)
+
+  it('skips codegen when disabled and stays disabled on refresh', function()
+    api.options = { servers = { clangd = { codegen = false } } }
+    local workflow = require 'arcadia-lspconfig.servers.clangd'(api)
+
+    assert.is_true(workflow.activate(bufnr))
+    assert.are.equal(1, #captured_jobs)
+    assert.are.equal('compile_commands', statuses[#statuses].stage)
+    local temporary = captured_jobs[1].cmd[4]:match '^%-%-output%-file=(.+)$'
+    helpers.write(temporary, '[]')
+    captured_jobs[1].on_exit { code = 0, signal = 0, stdout = '', stderr = '' }
+
+    assert.are.equal('ready', statuses[#statuses].state)
+    assert.are.equal(1, #restarts)
+    assert.is_true(workflow.refresh(bufnr))
+    assert.are.equal(2, #captured_jobs)
+    assert.are.equal('dump', captured_jobs[2].cmd[2])
+  end)
 end)

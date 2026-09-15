@@ -44,6 +44,8 @@ clangd starts the following commands in background:
 1. `<arcadia-root>/ya dump compile-commands`
 2. `<arcadia-root>/ya make --add-result=.hpp --add-result=.cpp --replace-result`
 
+Set `servers.clangd.codegen = false` to skip the `ya make` codegen stage.
+
 After that, LSP server is restarted.
 
 Both `compile_commands.json` and codegen results are stored in `~/.local/share/nvim/arcadia-lspconfig/<hash>/clangd/`.
@@ -54,6 +56,8 @@ pyright / basedpyright start the following commands in background:
 
 1. `<arcadia-root>/ya ide vscode --py3`
 2. `<arcadia-root>/ya make --add-result=.py --replace-result`
+
+Set `codegen = false` for the selected Python server to skip the `ya make` codegen stage.
 
 After that, LSP server is restarted.
 
@@ -67,9 +71,10 @@ Defaults:
 require('arcadia-lspconfig').setup({
   servers = {
     -- set a server to `false` to leave it unmanaged by this plugin
-    clangd = {},
-    pyright = {},
-    basedpyright = {},
+    -- set codegen to false to skip ya make --replace-result
+    clangd = { codegen = true },
+    pyright = { codegen = true },
+    basedpyright = { codegen = true },
     -- use `ty = false` to avoid disabling ty (it doesn't work well with arcadia python)
     ty = {},
   },
