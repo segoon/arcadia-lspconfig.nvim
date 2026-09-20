@@ -1,3 +1,5 @@
+local helpers = require 'tests.helpers'
+
 describe('shared jobs', function()
   local jobs
   local callbacks
@@ -57,5 +59,37 @@ describe('shared jobs', function()
     jobs.drop_buffer(2)
     assert.are.equal(1, killed)
     assert.is_nil(jobs.get 'root\0clangd')
+  end)
+
+  it('streams stdout to a file and reports completion after closing it', function()
+    local root = helpers.tempdir()
+    local output = root .. '/plan.json'
+    local options
+    local completed
+    jobs._set_system(function(_, system_options, callback)
+      options = system_options
+      callbacks[#callbacks + 1] = callback
+      return { kill = function() end }
+    end)
+    jobs.start('root\0protols', {
+      cmd = { 'fake' },
+      cwd = root,
+      bufnr = 1,
+      stdout_path = output,
+      on_exit = function(result)
+        completed = result
+      end,
+    })
+
+    options.stdout(nil, '{"graph":')
+    options.stdout(nil, '[]}')
+    callbacks[1] { code = 0, signal = 0, stderr = '' }
+
+    assert.is_true(vim.wait(1000, function()
+      return completed ~= nil
+    end, 10))
+    assert.are.equal('{"graph":[]}', table.concat(vim.fn.readfile(output), '\n'))
+    assert.is_nil(completed.stdout_error)
+    helpers.cleanup(root)
   end)
 end)

@@ -36,6 +36,15 @@ local function create_ty(api)
   return require 'arcadia-lspconfig.servers.ty'(api)
 end
 
+---@param api table
+---@return ArcadiaLspWorkflow
+local function create_protols(api)
+  local dependencies = vim.tbl_extend('force', {}, api, {
+    cache = require 'arcadia-lspconfig.servers.protols_cache',
+  })
+  return require 'arcadia-lspconfig.servers.protols'(dependencies)
+end
+
 ---@param executable string
 ---@return boolean
 local function is_executable(executable)
@@ -78,6 +87,12 @@ return {
     allowed_options = {},
     route_commands = false,
     create = create_ty,
+  },
+  {
+    name = 'protols',
+    default_options = {},
+    allowed_options = {},
+    create = create_protols,
   },
   {
     name = 'ya-make-lsp',

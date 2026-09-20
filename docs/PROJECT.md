@@ -10,13 +10,14 @@ The target language set is:
 - `clangd` for C and C++
 - `pyright` or `basedpyright` for Python
 - suppression of `ty` inside Arcadia
+- `protols` for Protocol Buffers
 - `gopls` for Go
 - (probably something else soon)
 
-The implemented built-in workflows are `clangd`, `pyright`, and `basedpyright`,
-plus an Arcadia-only suppression policy for `ty` and an automatically managed
-`ya-make-lsp` workflow. The two configured Python servers share one workflow
-implementation. Other server modules remain planned work.
+The implemented built-in workflows are `clangd`, `pyright`, `basedpyright`, and
+`protols`, plus an Arcadia-only suppression policy for `ty` and an automatically
+managed `ya-make-lsp` workflow. The two configured Python servers share one
+workflow implementation. Other server modules remain planned work.
 
 Each server is implemented by a separate Lua submodule. A server module owns its
 complete Arcadia-specific workflow, including file relevance checks,
@@ -82,6 +83,7 @@ vim.lsp.config("clangd", user_clangd_config)
 require("arcadia-lspconfig").setup()
 
 vim.lsp.enable("clangd")
+vim.lsp.enable("protols")
 ```
 
 `ya-make-lsp` is enabled automatically when its integration is configured;
@@ -149,6 +151,10 @@ available in status information and logs.
 `ya-make-lsp` instead uses the shared managed directory
 `stdpath("data")/arcadia-lspconfig/ya-make-lsp/`, because one exported trunk
 build is reused by every checkout and LSP root.
+
+Protols uses a checkout-scoped directory keyed by the Arcadia root. Its build
+plan index deliberately spans LSP roots because one target plan can cover
+source `.proto` inputs from several `ya.make` modules.
 
 Each server module owns the contents of its directory, including cleanup of
 partial artifacts left by a failed, timed-out, or cancelled operation.
@@ -383,7 +389,27 @@ revision. The per-server `codegen` option defaults to `true`. When `false`, omit
 the `ya make` stage; configuration generation alone determines readiness. A
 project-owned configuration bypasses both stages.
 
-### 10.6 ya-make-lsp lifecycle
+### 10.6 Protols preparation lifecycle
+
+Protols runs `ya dump build-plan . --ignore-recurses` in the activating target's
+nearest `ya.make` root. The raw JSON is streamed to a temporary file, validated,
+and atomically installed in a checkout-scoped cache. Source include roots are
+derived from `protoc` command arguments. `$(BUILD_ROOT)` roots and generated
+proto inputs are intentionally omitted.
+
+The cache index records every source `.proto` graph input. A file covered by an
+existing plan reuses that plan and refreshes its originating target rather than
+running another dump in the file's own module. The nearest `ya.make` directory
+still remains the LSP client root, preventing Protols from recursively scanning
+the complete Arcadia checkout.
+
+Cache-local `clang-format` and `protoc` wrappers put Arcadia tools on `PATH`.
+They execute `{arcadia-root}/ya tool clang-format` and `{arcadia-root}/ya run
+`{arcadia-root}/contrib/tools/protoc --` without changing directory. A
+project-owned `protols.toml` is never written; explicit tool paths there retain
+precedence.
+
+### 10.7 ya-make-lsp lifecycle
 
 A valid shared installation starts immediately. Every later `ya.make` activation
 runs `arc log -n1 trunk --oneline` for the server source path. A missing or
@@ -394,8 +420,10 @@ restored when export or build fails. Concurrent opens share one global pipeline.
 
 ## 11. Asynchronous jobs
 
-Arcadia preparation commands, including `ya dump compile-commands`,
-`ya ide vscode`, and `ya make`, must run asynchronously.
+Arcadia preparation commands, including `ya dump compile-commands`, `ya dump
+build-plan`, `ya ide vscode`, and `ya make`, must run asynchronously. Large
+build-plan stdout is streamed directly to its cache candidate rather than held
+in memory.
 
 Default job configuration:
 
@@ -442,6 +470,7 @@ require("arcadia-lspconfig").setup({
     pyright = { codegen = true },
     basedpyright = { codegen = true },
     ty = {},
+    protols = {},
     ["ya-make-lsp"] = {},
   },
   jobs = {

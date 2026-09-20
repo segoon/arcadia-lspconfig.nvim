@@ -41,6 +41,18 @@ def dump_compile_commands():
     return 0
 
 
+def dump_build_plan():
+    if pathlib.Path('.fake_ya_fail').exists():
+        print('requested failure', file=sys.stderr)
+        return 1
+    source = pathlib.Path('.fake_build_plan')
+    contents = source.read_text(encoding='utf-8') if source.exists() else '{"graph":[]}'
+    sys.stdout.write(contents)
+    sys.stdout.flush()
+    append_log('build-plan:' + os.getcwd() + ':' + ' '.join(sys.argv[2:]))
+    return 0
+
+
 def make():
     python_build = "--add-result=.py" in sys.argv
     if not synchronize("make", "ide" if python_build else "dump"):
@@ -116,12 +128,22 @@ def run_lsp(name):
 
 if sys.argv[1:3] == ["dump", "compile-commands"]:
     sys.exit(dump_compile_commands())
+if sys.argv[1:3] == ['dump', 'build-plan']:
+    sys.exit(dump_build_plan())
 if sys.argv[1:2] == ["make"]:
     sys.exit(make())
 if sys.argv[1:3] == ["ide", "vscode"]:
     sys.exit(ide_vscode())
 if sys.argv[1:3] == ["tool", "clangd"]:
     sys.exit(run_lsp("clangd"))
+if sys.argv[1:3] == ['tool', 'clang-format']:
+    append_log('clang-format:' + os.getcwd() + ':' + ' '.join(sys.argv[3:]))
+    sys.exit(0)
+if sys.argv[1:2] == ['run']:
+    append_log('protoc:' + os.getcwd() + ':' + ' '.join(sys.argv[2:]))
+    sys.exit(0)
+if sys.argv[1:2] == ['fake-protols']:
+    sys.exit(run_lsp('protols'))
 if sys.argv[1:2] == ["fake-pyright"]:
     sys.exit(run_lsp("pyright"))
 if sys.argv[1:2] == ["fake-basedpyright"]:
