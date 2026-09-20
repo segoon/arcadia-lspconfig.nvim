@@ -13,6 +13,12 @@ local function count_lines(path, prefix)
   return count
 end
 
+---@param executable string
+---@return boolean
+local function is_executable(executable)
+  return vim.fn.executable(executable) == 1
+end
+
 describe('ya-make-lsp lifecycle', function()
   local sandbox
   local data_dir
@@ -74,6 +80,7 @@ describe('ya-make-lsp lifecycle', function()
       config = require 'arcadia-lspconfig.config',
       jobs = require 'arcadia-lspconfig.jobs',
       clients = require 'arcadia-lspconfig.clients',
+      is_executable = is_executable,
       status = require 'arcadia-lspconfig.status',
       notify = require 'arcadia-lspconfig.notify',
     }

@@ -10,6 +10,7 @@ describe('ya-make-lsp workflow', function()
   local warnings
   local statuses
   local data_dir
+  local executables
   local api
 
   before_each(function()
@@ -28,6 +29,11 @@ describe('ya-make-lsp workflow', function()
     warnings = {}
     statuses = {}
     data_dir = root .. '/data/ya-make-lsp'
+    executables = {
+      arc = true,
+      node = true,
+      npm = true,
+    }
     api = {
       root = require 'arcadia-lspconfig.root',
       paths = {
@@ -70,6 +76,9 @@ describe('ya-make-lsp workflow', function()
           warnings[#warnings + 1] = code
         end,
       },
+      is_executable = function(executable)
+        return executables[executable]
+      end,
     }
   end)
 
@@ -182,6 +191,31 @@ describe('ya-make-lsp workflow', function()
     assert.are.equal(1, #starts)
     assert.are.equal(1, #restarts)
   end)
+
+  it('reports a missing arc executable without starting an update', function()
+    executables.arc = false
+    local workflow = require 'arcadia-lspconfig.servers.yamake'(api)
+
+    local activated, activate_error = workflow.activate(bufnr)
+
+    assert.is_nil(activated)
+    assert.are.equal('arc is not executable', activate_error)
+    assert.are.same({ 'missing_arc' }, warnings)
+    assert.are.equal(0, #jobs)
+  end)
+
+  it('reports missing Node.js tools without starting an update', function()
+    executables.npm = false
+    local workflow = require 'arcadia-lspconfig.servers.yamake'(api)
+
+    local activated, activate_error = workflow.activate(bufnr)
+
+    assert.is_nil(activated)
+    assert.are.equal('node and npm are required to install ya-make-lsp', activate_error)
+    assert.are.same({ 'missing_node' }, warnings)
+    assert.are.equal(0, #jobs)
+  end)
+
   it('registers only the exact ya.make filename', function()
     require 'arcadia-lspconfig.servers.yamake'(api)
 

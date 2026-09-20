@@ -253,12 +253,12 @@ return function(api)
       end
       return true
     end
-    if vim.fn.executable 'arc' ~= 1 then
+    if not api.is_executable 'arc' then
       local message = 'arc is not executable'
       fail('missing_arc', message)
       return nil, message
     end
-    if vim.fn.executable 'node' ~= 1 or vim.fn.executable 'npm' ~= 1 then
+    if not api.is_executable 'node' or not api.is_executable 'npm' then
       local message = 'node and npm are required to install ya-make-lsp'
       fail('missing_node', message)
       return nil, message
@@ -340,7 +340,7 @@ return function(api)
   function workflow.health(context)
     local entries = {}
     for _, executable in ipairs { 'arc', 'node', 'npm' } do
-      local available = vim.fn.executable(executable) == 1
+      local available = api.is_executable(executable)
       entries[#entries + 1] = {
         level = available and 'ok' or 'error',
         message = available and (executable .. ' is executable')
