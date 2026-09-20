@@ -36,6 +36,22 @@ local function create_ty(api)
   return require 'arcadia-lspconfig.servers.ty'(api)
 end
 
+---@param executable string
+---@return boolean
+local function is_executable(executable)
+  return vim.fn.executable(executable) == 1
+end
+
+---@param api table
+---@return ArcadiaLspWorkflow
+local function create_yamake(api)
+  local dependencies = vim.tbl_extend('force', {}, api, {
+    cache = require 'arcadia-lspconfig.servers.yamake_cache',
+    is_executable = is_executable,
+  })
+  return require 'arcadia-lspconfig.servers.yamake'(dependencies)
+end
+
 ---@type ArcadiaLspServerDefinition[]
 return {
   {
@@ -62,5 +78,16 @@ return {
     allowed_options = {},
     route_commands = false,
     create = create_ty,
+  },
+  {
+    name = 'ya-make-lsp',
+    default_options = {},
+    allowed_options = {},
+    auto_enable = true,
+    config = {
+      cmd = { 'node', 'ya-make-lsp.js', '--stdio' },
+      filetypes = { 'yamake' },
+    },
+    create = create_yamake,
   },
 }

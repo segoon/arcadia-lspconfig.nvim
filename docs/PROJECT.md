@@ -14,9 +14,9 @@ The target language set is:
 - (probably something else soon)
 
 The implemented built-in workflows are `clangd`, `pyright`, and `basedpyright`,
-plus an Arcadia-only suppression policy for `ty`. The two configured Python
-servers share one workflow implementation. Other server modules remain planned
-work.
+plus an Arcadia-only suppression policy for `ty` and an automatically managed
+`ya-make-lsp` workflow. The two configured Python servers share one workflow
+implementation. Other server modules remain planned work.
 
 Each server is implemented by a separate Lua submodule. A server module owns its
 complete Arcadia-specific workflow, including file relevance checks,
@@ -49,7 +49,8 @@ prepare more data, apply a second configuration, and restart again.
 
 The first version will not:
 
-- Install LSP servers or toolchains.
+- Install general-purpose LSP servers or toolchains. `ya-make-lsp` is the
+  built-in exception and is exported and built automatically.
 - Configure formatters or linters.
 - Build or test Arcadia targets unrelated to LSP preparation.
 - Provide code-generation commands unrelated to LSP preparation.
@@ -63,14 +64,17 @@ The first version will not:
 - Neovim 0.11.3 or newer is required.
 - `nvim-lspconfig` is a required dependency.
 - The plugin uses the native `vim.lsp.config()` and `vim.lsp.enable()` APIs.
-- External Arcadia tools such as `ya` are not installed by the plugin.
+- External Arcadia tools such as `ya`, `arc`, Node.js, and npm are not installed
+  by the plugin.
+- `ya-make-lsp` is exported from Arcadia trunk and built under Neovim's data
+  directory; it is never built in the working checkout.
 - Missing required tools produce a deduplicated warning rather than a hard
   failure of Neovim.
 
 ## 5. User-owned activation
 
-The plugin configures servers during `setup()`, but does not enable them. The
-user explicitly chooses which configured servers Neovim should enable:
+The plugin configures servers during `setup()`. The user explicitly chooses
+which configured general-purpose servers Neovim should enable:
 
 ```lua
 vim.lsp.config("clangd", user_clangd_config)
@@ -79,6 +83,9 @@ require("arcadia-lspconfig").setup()
 
 vim.lsp.enable("clangd")
 ```
+
+`ya-make-lsp` is enabled automatically when its integration is configured;
+setting `servers["ya-make-lsp"] = false` disables it.
 
 User LSP configuration must be applied before `setup()`. Enabling a managed
 server before `setup()` is unsupported because it may start a client before the
@@ -138,6 +145,10 @@ stdpath("data")/arcadia-lspconfig/<lsp-root-hash>/<server>/
 `<lsp-root-hash>` is derived from the full LSP root path so that separate roots
 and checkouts do not collide. The original Arcadia and LSP root paths remain
 available in status information and logs.
+
+`ya-make-lsp` instead uses the shared managed directory
+`stdpath("data")/arcadia-lspconfig/ya-make-lsp/`, because one exported trunk
+build is reused by every checkout and LSP root.
 
 Each server module owns the contents of its directory, including cleanup of
 partial artifacts left by a failed, timed-out, or cancelled operation.
@@ -372,6 +383,15 @@ revision. The per-server `codegen` option defaults to `true`. When `false`, omit
 the `ya make` stage; configuration generation alone determines readiness. A
 project-owned configuration bypasses both stages.
 
+### 10.6 ya-make-lsp lifecycle
+
+A valid shared installation starts immediately. Every later `ya.make` activation
+runs `arc log -n1 trunk --oneline` for the server source path. A missing or
+changed revision exports that path from `trunk` into the managed data directory,
+runs `npm install` and `npm run build` there, validates the server script, and
+starts or restarts every interested root. The previous managed directory is
+restored when export or build fails. Concurrent opens share one global pipeline.
+
 ## 11. Asynchronous jobs
 
 Arcadia preparation commands, including `ya dump compile-commands`,
@@ -422,6 +442,7 @@ require("arcadia-lspconfig").setup({
     pyright = { codegen = true },
     basedpyright = { codegen = true },
     ty = {},
+    ["ya-make-lsp"] = {},
   },
   jobs = {
     cancel_on_buff_exit = true,
@@ -438,6 +459,9 @@ only this plugin's integration for that server. Plugin integration and Neovim
 LSP activation are separate: users choose an active Python server with
 `vim.lsp.enable()`. Runtime command routing considers enabled servers and
 reports an ambiguity if multiple integrations match one buffer.
+
+The ya-make-lsp definition owns its native config and is enabled automatically.
+It assigns the `yamake` filetype only to exact `ya.make` filenames.
 
 The ty definition is non-routable: its root callback suppresses ty below an
 Arcadia root and delegates to the original nvim-lspconfig root logic elsewhere.
@@ -556,6 +580,7 @@ and error context sufficient to diagnose asynchronous workflow behavior.
 - Nearest bounded `ya.make` root detection.
 - Availability and executability of `ya` when required.
 - Availability of configured LSP executables.
+- Availability of `arc`, Node.js, and npm plus the installed ya-make-lsp revision.
 - Root/server data paths and relevant generated artifacts.
 - Currently running async jobs.
 - The last recorded warning or error for each applicable root/server.
@@ -625,6 +650,9 @@ production language servers.
 - Session-start background invalidation may temporarily use existing artifacts;
   each module decides when those artifacts are sufficiently valid to start or
   restart its server.
+- The shared ya-make-lsp installation is versioned by the latest trunk commit
+  touching its source directory; a trunk change between log and export may cause
+  one redundant update on the following activation.
 - Go and future server-specific Arcadia commands, settings, and relevance rules
   remain to be specified in their respective modules.
 

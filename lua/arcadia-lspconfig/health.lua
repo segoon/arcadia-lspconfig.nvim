@@ -49,7 +49,9 @@ function M.check()
   for _, definition in ipairs(runtime_state.definitions) do
     if not runtime_state.options or runtime_state.options.servers[definition.name] ~= false then
       local config_file = ('lsp/%s.lua'):format(definition.name)
-      if #vim.api.nvim_get_runtime_file(config_file, false) > 0 then
+      if definition.config then
+        health.ok(('arcadia-lspconfig provides %s configuration'):format(definition.name))
+      elseif #vim.api.nvim_get_runtime_file(config_file, false) > 0 then
         health.ok(('nvim-lspconfig provides %s'):format(config_file))
       else
         health.error(('nvim-lspconfig does not provide %s'):format(config_file))

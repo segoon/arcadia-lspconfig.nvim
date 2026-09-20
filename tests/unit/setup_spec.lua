@@ -21,6 +21,7 @@ describe('setup', function()
     assert.is_not_nil(plugin._state().workflows.ty)
     assert.is_false(plugin._state().options.servers.pyright.codegen)
     assert.is_true(plugin._state().options.servers.basedpyright.codegen)
+    assert.is_not_nil(plugin._state().workflows['ya-make-lsp'])
     for _, command in ipairs {
       'LspArcadiaRefresh',
       'LspArcadiaStatus',

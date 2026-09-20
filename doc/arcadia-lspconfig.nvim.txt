@@ -15,24 +15,27 @@ CONTENTS                                      *arcadia-lspconfig.nvim-contents*
 INTRODUCTION                                     *arcadia-lspconfig.nvim*
 
 arcadia-lspconfig.nvim extends native Neovim LSP configurations for Arcadia
-tier0 development. The current release supports clangd, Pyright, and
-BasedPyright. It suppresses ty inside Arcadia to prevent a globally enabled ty
+tier0 development. The current release supports clangd, Pyright,
+BasedPyright, and ya-make-lsp.
+It suppresses ty inside Arcadia to prevent a globally enabled ty
 server from competing with the Arcadia Python server. Go and other language
 modules are planned.
 
-The plugin configures clangd, Pyright, BasedPyright, and ty during setup. The
-user explicitly enables the desired servers with
-|vim.lsp.enable()|.
+The plugin configures clangd, Pyright, BasedPyright, ty, and ya-make-lsp
+during setup. The user explicitly enables clangd and the Python servers with
+|vim.lsp.enable()|. ya-make-lsp is enabled automatically.
 
 ==============================================================================
 REQUIREMENTS                          *arcadia-lspconfig-requirements*
 
 - Neovim 0.11.3 or newer.
 - nvim-lspconfig on 'runtimepath'.
-- An executable {arcadia-root}/ya for Arcadia preparation.
-- A configured language-server executable for each enabled server.
+- Executable ya and arc commands for Arcadia preparation.
+- Node.js and npm for building ya-make-lsp.
+- A configured language-server executable for each other enabled server.
 
-The plugin does not install tools.
+The plugin does not install Arcadia tools or general-purpose language servers.
+It exports, builds, and updates ya-make-lsp automatically.
 
 ==============================================================================
 SETUP                                            *arcadia-lspconfig-setup*
@@ -55,6 +58,7 @@ Default options: >lua
       pyright = { codegen = true },
       basedpyright = { codegen = true },
       ty = {},
+      ['ya-make-lsp'] = {},
     },
     jobs = {
       cancel_on_buff_exit = true,
@@ -90,6 +94,11 @@ servers.basedpyright ~
 If both Pyright and BasedPyright are activated for one buffer, both may attach.
 Refresh, restart, and health report that the active integration is ambiguous
 rather than selecting one silently.
+
+                              *arcadia-lspconfig-servers-yamake*
+servers["ya-make-lsp"] ~
+    Automatically enabled for files named exactly "ya.make". Set to false to
+    disable filetype detection, installation, updates, and LSP activation.
 
                                            *arcadia-lspconfig-servers-ty*
 servers.ty ~
@@ -185,6 +194,26 @@ it with servers.basedpyright as described in |arcadia-lspconfig-setup|. Its
 cache and status key are "basedpyright", and its client command comes from the
 standard nvim-lspconfig basedpyright configuration.
 
+                                      *arcadia-lspconfig-yamake*
+YA.MAKE ~
+
+Opening a file named exactly "ya.make" assigns the "yamake" filetype and
+enables ya-make-lsp. On first use the plugin runs asynchronously: >
+
+  arc log -n1 trunk --oneline devtools/ide/vscode-yandex-arc/ya-make-lsp
+  arc export trunk devtools/ide/vscode-yandex-arc/ya-make-lsp --to {data-dir}
+  npm install
+  npm run build
+<
+The npm commands run in the exported directory, never in the Arcadia checkout.
+The installation lives at: >
+
+  stdpath("data")/arcadia-lspconfig/ya-make-lsp/
+<
+Later opens start a valid cached server immediately and check the trunk
+revision in the background. A changed revision rebuilds and restarts the
+server. A failed update restores the last working installation.
+
 ==============================================================================
 API                                                *arcadia-lspconfig-api*
 
@@ -223,10 +252,9 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:LspArcadiaRestart*
 :LspArcadiaRestart
-    Restart the applicable clangd, Pyright, or BasedPyright client for the
-    current buffer's Arcadia LSP root. Refuse when its required configuration
-    is unavailable.
-
+    Restart the applicable clangd, Pyright, BasedPyright, or ya-make-lsp
+    client for the current buffer's Arcadia LSP root. Refuse when its required
+    configuration is unavailable.
 ==============================================================================
 HEALTH                                            *arcadia-lspconfig-health*
 
