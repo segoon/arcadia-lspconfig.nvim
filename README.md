@@ -6,6 +6,7 @@ You don't have to additionally configure LSP servers for Arcadia, it should "jus
 The plugin supports:
 - C and C++ through `clangd`
 - Python through `pyright` or `basedpyright` (and disables `ty`)
+- Protocol Buffers through `protols`
 - `ya.make` files through the automatically managed `ya-make-lsp`
 
 # Requirements
@@ -37,6 +38,7 @@ trunk.
 ```lua
 vim.lsp.enable('clangd')
 vim.lsp.enable('basedpyright')
+vim.lsp.enable('protols')
 ```
 
 `ya-make-lsp` is enabled automatically. Opening an Arcadia `ya.make` file
@@ -69,6 +71,30 @@ Set `codegen = false` for the selected Python server to skip the `ya make` codeg
 After that, LSP server is restarted.
 
 vscode project and codegen results are stored in `~/.local/share/nvim/arcadia-lspconfig/<hash>/pyright/`.
+
+## Protocol Buffers
+
+For an Arcadia Proto target, Protols runs this command in the nearest `ya.make`
+directory:
+
+```text
+<arcadia-root>/ya dump build-plan . --ignore-recurses
+```
+
+The complete build plan is cached. Effective source import roots are extracted
+from its `protoc` commands and passed as `init_options.include_paths`. All
+source `.proto` inputs in the plan share that cache, including dependencies in
+other `ya.make` modules. Generated imports under `$(BUILD_ROOT)` are not
+configured.
+
+Protols invokes Arcadia tools through cache-local wrappers. Formatting runs
+`<arcadia-root>/ya tool clang-format`; diagnostics run
+`<arcadia-root>/ya run <arcadia-root>/contrib/tools/protoc -- ...`. The wrappers
+preserve Protols' working directory. A project `protols.toml` remains untouched;
+explicit tool paths there take precedence over these wrappers.
+
+The raw build plans and derived index are stored under the checkout-specific
+`stdpath("data")/arcadia-lspconfig/<hash>/protols/` directory.
 
 ## ya.make
 
@@ -103,6 +129,7 @@ require('arcadia-lspconfig').setup({
     basedpyright = { codegen = true },
     -- use `ty = false` to avoid disabling ty (it doesn't work well with arcadia python)
     ty = {},
+    protols = {},
     -- automatically installed and enabled for exact ya.make files
     ['ya-make-lsp'] = {},
   },
@@ -185,11 +212,12 @@ Its event data is deliberately unspecified; consumers should call `status()` or
 
 ## Commands
 
-- `:LspArcadiaRefresh` reruns preparation for the current buffer.s applicable
+- `:LspArcadiaRefresh` reruns preparation for the current buffer's applicable
   server.
 - `:LspArcadiaStatus` displays structured status.
 - `:LspArcadiaRestart` restarts the current root's applicable clangd, Pyright,
-  BasedPyright, or ya-make-lsp client when its required configuration is available.
+  BasedPyright, Protols, or ya-make-lsp client when its required configuration
+  is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
   server-specific cache state, and the current workflow for the file from which
   it was invoked.

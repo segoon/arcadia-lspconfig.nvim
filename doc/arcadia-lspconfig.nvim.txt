@@ -16,14 +16,15 @@ INTRODUCTION                                     *arcadia-lspconfig.nvim*
 
 arcadia-lspconfig.nvim extends native Neovim LSP configurations for Arcadia
 tier0 development. The current release supports clangd, Pyright,
-BasedPyright, and ya-make-lsp.
+BasedPyright, Protols, and ya-make-lsp.
 It suppresses ty inside Arcadia to prevent a globally enabled ty
 server from competing with the Arcadia Python server. Go and other language
 modules are planned.
 
-The plugin configures clangd, Pyright, BasedPyright, ty, and ya-make-lsp
-during setup. The user explicitly enables clangd and the Python servers with
-|vim.lsp.enable()|. ya-make-lsp is enabled automatically.
+The plugin configures clangd, Pyright, BasedPyright, ty, Protols, and
+ya-make-lsp during setup. The user explicitly enables clangd, the Python
+servers, and Protols with |vim.lsp.enable()|. ya-make-lsp is enabled
+automatically.
 
 ==============================================================================
 REQUIREMENTS                          *arcadia-lspconfig-requirements*
@@ -49,6 +50,7 @@ Apply user server settings first, call setup once, then enable the servers: >lua
   require('arcadia-lspconfig').setup()
   vim.lsp.enable('clangd')
   vim.lsp.enable('pyright')
+  vim.lsp.enable('protols')
 <
 Default options: >lua
 
@@ -58,6 +60,7 @@ Default options: >lua
       pyright = { codegen = true },
       basedpyright = { codegen = true },
       ty = {},
+      protols = {},
       ['ya-make-lsp'] = {},
     },
     jobs = {
@@ -94,6 +97,11 @@ servers.basedpyright ~
 If both Pyright and BasedPyright are activated for one buffer, both may attach.
 Refresh, restart, and health report that the active integration is ambiguous
 rather than selecting one silently.
+
+                                      *arcadia-lspconfig-servers-protols*
+servers.protols ~
+    Set to false to disable this plugin's Protols integration. Protols has no
+    nested plugin options. A project-owned protols.toml remains authoritative.
 
                               *arcadia-lspconfig-servers-yamake*
 servers["ya-make-lsp"] ~
@@ -194,6 +202,38 @@ it with servers.basedpyright as described in |arcadia-lspconfig-setup|. Its
 cache and status key are "basedpyright", and its client command comes from the
 standard nvim-lspconfig basedpyright configuration.
 
+                                      *arcadia-lspconfig-protols*
+PROTOLS ~
+
+For a Protocol Buffer file, the plugin runs this command in the nearest
+{lsp-root}: >
+
+  {arcadia-root}/ya dump build-plan . --ignore-recurses
+<
+The complete build plan is cached below: >
+
+  stdpath("data")/arcadia-lspconfig/{checkout-hash}/protols/
+<
+Source import roots are extracted from protoc commands and passed as
+"initializationOptions.include_paths". Every source .proto graph input covered
+by the plan reuses the same cache, including inputs beneath other ya.make
+roots. Generated paths and protos under $(BUILD_ROOT) are omitted.
+
+Protols clients remain rooted at each file's nearest ya.make directory so the
+server does not recursively scan the whole checkout. One checkout-scoped cache
+can therefore configure several separately rooted clients. A cached plan starts
+the client immediately and is refreshed once per Neovim session.
+
+Cache-local wrappers provide Arcadia tools without changing Protols' working
+directory: >
+
+  "$ARCADIA_LSPCONFIG_YA" tool clang-format "$@"
+  "$ARCADIA_LSPCONFIG_YA" run \
+    "$ARCADIA_LSPCONFIG_ROOT"/contrib/tools/protoc -- "$@"
+<
+Explicit config.path.clang_format or config.path.protoc values in a project
+protols.toml take precedence over the wrappers.
+
                                       *arcadia-lspconfig-yamake*
 YA.MAKE ~
 
@@ -252,9 +292,9 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:LspArcadiaRestart*
 :LspArcadiaRestart
-    Restart the applicable clangd, Pyright, BasedPyright, or ya-make-lsp
-    client for the current buffer's Arcadia LSP root. Refuse when its required
-    configuration is unavailable.
+    Restart the applicable clangd, Pyright, BasedPyright, Protols, or
+    ya-make-lsp client for the current buffer's Arcadia LSP root. Refuse when
+    its required configuration is unavailable.
 ==============================================================================
 HEALTH                                            *arcadia-lspconfig-health*
 

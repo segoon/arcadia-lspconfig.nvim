@@ -5,6 +5,7 @@ local M = {}
 ---@field signal integer
 ---@field stdout? string
 ---@field stderr? string
+---@field stdout_error? string
 ---@field cancelled? boolean
 ---@field timed_out? boolean
 
@@ -13,6 +14,7 @@ local M = {}
 ---@field cwd string
 ---@field bufnr integer
 ---@field timeout_ms? number
+---@field stdout_path? string
 ---@field on_exit fun(result: ArcadiaLspJobResult)
 
 ---@class ArcadiaLspJob
@@ -128,23 +130,52 @@ function M.start(key, spec)
   }
   active[key] = job
 
-  local ok, process_or_error = pcall(
-    system,
-    spec.cmd,
-    { cwd = spec.cwd, text = true },
-    function(result)
-      vim.schedule(function()
-        close_timer(job)
-        if active[key] == job then
-          active[key] = nil
-        end
-        result.cancelled = job.cancelled
-        result.timed_out = job.timed_out
-        job.on_exit(result)
-      end)
+  local stdout_handle
+  if spec.stdout_path then
+    local open_error
+    stdout_handle, open_error = io.open(spec.stdout_path, 'wb')
+    if not stdout_handle then
+      active[key] = nil
+      return nil, ('cannot open job stdout file: %s'):format(open_error or 'unknown error')
     end
-  )
+  end
+
+  local system_options = { cwd = spec.cwd, text = true }
+  if stdout_handle then
+    system_options.stdout = function(error_message, data)
+      if error_message then
+        job.stdout_error = error_message
+      elseif data and not job.stdout_error then
+        local written, write_error = stdout_handle:write(data)
+        if not written then
+          job.stdout_error = write_error or 'unknown write error'
+        end
+      end
+    end
+  end
+
+  local ok, process_or_error = pcall(system, spec.cmd, system_options, function(result)
+    if stdout_handle then
+      local closed, close_error = stdout_handle:close()
+      if not closed and not job.stdout_error then
+        job.stdout_error = close_error or 'unknown close error'
+      end
+    end
+    vim.schedule(function()
+      close_timer(job)
+      if active[key] == job then
+        active[key] = nil
+      end
+      result.cancelled = job.cancelled
+      result.timed_out = job.timed_out
+      result.stdout_error = job.stdout_error
+      job.on_exit(result)
+    end)
+  end)
   if not ok then
+    if stdout_handle then
+      stdout_handle:close()
+    end
     active[key] = nil
     return nil, tostring(process_or_error)
   end
