@@ -51,12 +51,16 @@ if tool == "arc" and sys.argv[1:2] == ["log"]:
     print(os.environ["ARC_LSP_TEST_REVISION"] + " test revision")
     sys.exit(0)
 if tool == "arc" and sys.argv[1:2] == ["export"]:
-    destination = pathlib.Path(sys.argv[sys.argv.index("--to") + 1])
+    source = pathlib.Path(sys.argv[3])
+    destination = pathlib.Path(sys.argv[sys.argv.index("--to") + 1]) / source
     destination.mkdir(parents=True)
     (destination / "package.json").write_text("{}", encoding="utf-8")
     append_log("arc-export:" + os.getcwd() + ":" + " ".join(sys.argv[1:]))
     sys.exit(0)
 if tool == "npm" and sys.argv[1:] == ["install"]:
+    if not pathlib.Path("package.json").is_file():
+        print("package.json is missing", file=sys.stderr)
+        sys.exit(1)
     append_log("npm-install:" + os.getcwd())
     sys.exit(0)
 if tool == "npm" and sys.argv[1:] == ["run", "build"]:

@@ -1,5 +1,7 @@
 local helpers = require 'tests.helpers'
 
+local SOURCE = 'devtools/ide/vscode-yandex-arc/ya-make-lsp'
+
 describe('ya-make-lsp workflow', function()
   local root
   local bufnr
@@ -10,6 +12,7 @@ describe('ya-make-lsp workflow', function()
   local warnings
   local statuses
   local data_dir
+  local install_dir
   local executables
   local api
 
@@ -29,6 +32,7 @@ describe('ya-make-lsp workflow', function()
     warnings = {}
     statuses = {}
     data_dir = root .. '/data/ya-make-lsp'
+    install_dir = vim.fs.joinpath(data_dir, SOURCE)
     executables = {
       arc = true,
       node = true,
@@ -126,25 +130,25 @@ describe('ya-make-lsp workflow', function()
 
     finish(2)
     assert.are.same({ 'npm', 'install' }, jobs[3].spec.cmd)
-    assert.are.equal(data_dir, jobs[3].spec.cwd)
+    assert.are.equal(install_dir, jobs[3].spec.cwd)
     finish(3)
     assert.are.same({ 'npm', 'run', 'build' }, jobs[4].spec.cmd)
-    assert.are.equal(data_dir, jobs[4].spec.cwd)
+    assert.are.equal(install_dir, jobs[4].spec.cwd)
 
-    helpers.write(data_dir .. '/out/ya-make-lsp.js')
+    helpers.write(install_dir .. '/out/ya-make-lsp.js')
     finish(4)
 
-    assert.are.equal(revision, api.cache.revision(data_dir))
+    assert.are.equal(revision, api.cache.revision(install_dir))
     assert.are.equal(1, #starts)
     assert.are.equal(0, #restarts)
-    assert.are.same({ 'node', data_dir .. '/out/ya-make-lsp.js', '--stdio' }, patches[1].cmd)
+    assert.are.same({ 'node', install_dir .. '/out/ya-make-lsp.js', '--stdio' }, patches[1].cmd)
     assert.are.equal('ready', statuses[#statuses].state)
   end)
 
   it('starts a cached server immediately and skips an unchanged revision', function()
     local revision = string.rep('b', 40)
-    helpers.write(data_dir .. '/out/ya-make-lsp.js')
-    helpers.write(data_dir .. '/.arcadia-revision', revision)
+    helpers.write(install_dir .. '/out/ya-make-lsp.js')
+    helpers.write(install_dir .. '/.arcadia-revision', revision)
     local workflow = require 'arcadia-lspconfig.servers.yamake'(api)
 
     assert.is_true(workflow.activate(bufnr))
@@ -158,16 +162,16 @@ describe('ya-make-lsp workflow', function()
 
   it('keeps a cached server when an update fails', function()
     local old_revision = string.rep('c', 40)
-    helpers.write(data_dir .. '/out/ya-make-lsp.js', 'old')
-    helpers.write(data_dir .. '/.arcadia-revision', old_revision)
+    helpers.write(install_dir .. '/out/ya-make-lsp.js', 'old')
+    helpers.write(install_dir .. '/.arcadia-revision', old_revision)
     local workflow = require 'arcadia-lspconfig.servers.yamake'(api)
 
     assert.is_true(workflow.activate(bufnr))
     finish(1, { stdout = string.rep('d', 40) .. ' changed\n' })
     finish(2, { code = 1, stderr = 'export failed\n' })
 
-    assert.are.equal(old_revision, api.cache.revision(data_dir))
-    assert.are.equal('old', vim.fn.readfile(data_dir .. '/out/ya-make-lsp.js')[1])
+    assert.are.equal(old_revision, api.cache.revision(install_dir))
+    assert.are.equal('old', vim.fn.readfile(install_dir .. '/out/ya-make-lsp.js')[1])
     assert.are.same({ 'export_failed' }, warnings)
     assert.are.equal('warning', statuses[#statuses].state)
     assert.are.equal(0, #restarts)
@@ -176,18 +180,18 @@ describe('ya-make-lsp workflow', function()
   it('reinstalls and restarts after the revision changes', function()
     local old_revision = string.rep('e', 40)
     local new_revision = string.rep('f', 40)
-    helpers.write(data_dir .. '/out/ya-make-lsp.js', 'old')
-    helpers.write(data_dir .. '/.arcadia-revision', old_revision)
+    helpers.write(install_dir .. '/out/ya-make-lsp.js', 'old')
+    helpers.write(install_dir .. '/.arcadia-revision', old_revision)
     local workflow = require 'arcadia-lspconfig.servers.yamake'(api)
 
     assert.is_true(workflow.activate(bufnr))
     finish(1, { stdout = new_revision .. ' changed\n' })
     finish(2)
     finish(3)
-    helpers.write(data_dir .. '/out/ya-make-lsp.js', 'new')
+    helpers.write(install_dir .. '/out/ya-make-lsp.js', 'new')
     finish(4)
 
-    assert.are.equal(new_revision, api.cache.revision(data_dir))
+    assert.are.equal(new_revision, api.cache.revision(install_dir))
     assert.are.equal(1, #starts)
     assert.are.equal(1, #restarts)
   end)
