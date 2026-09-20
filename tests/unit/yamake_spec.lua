@@ -220,6 +220,6 @@ describe('ya-make-lsp workflow', function()
     require 'arcadia-lspconfig.servers.yamake'(api)
 
     assert.are.equal('yamake', vim.filetype.match { filename = root .. '/project/ya.make' })
-    assert.is_not.equal('yamake', vim.filetype.match { filename = root .. '/project/ya.make.inc' })
+    assert.is_false(vim.filetype.match { filename = root .. '/project/ya.make.inc' } == 'yamake')
   end)
 end)
