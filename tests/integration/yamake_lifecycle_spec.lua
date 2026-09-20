@@ -1,5 +1,7 @@
 local helpers = require 'tests.helpers'
 
+local SOURCE = 'devtools/ide/vscode-yandex-arc/ya-make-lsp'
+
 local function count_lines(path, prefix)
   if vim.fn.filereadable(path) == 0 then
     return 0
@@ -22,6 +24,7 @@ end
 describe('ya-make-lsp lifecycle', function()
   local sandbox
   local data_dir
+  local install_dir
   local log
   local original_path
   local bufnr
@@ -29,6 +32,7 @@ describe('ya-make-lsp lifecycle', function()
   before_each(function()
     sandbox = helpers.tempdir()
     data_dir = sandbox .. '/data/ya-make-lsp'
+    install_dir = vim.fs.joinpath(data_dir, SOURCE)
     log = sandbox .. '/events.log'
     original_path = vim.env.PATH
     vim.env.ARC_LSP_TEST_LOG = log
@@ -47,7 +51,7 @@ describe('ya-make-lsp lifecycle', function()
     require('arcadia-lspconfig.root').clear_cache()
     require('arcadia-lspconfig.jobs').setup { cancel_on_buff_exit = true, timeout_ms = 5000 }
     vim.lsp.config('ya-make-lsp', {
-      cmd = { 'node', data_dir .. '/out/ya-make-lsp.js', '--stdio' },
+      cmd = { 'node', install_dir .. '/out/ya-make-lsp.js', '--stdio' },
       filetypes = { 'yamake' },
     })
     require('arcadia-lspconfig.config').capture('ya-make-lsp', vim.lsp.config['ya-make-lsp'])
@@ -107,7 +111,7 @@ describe('ya-make-lsp lifecycle', function()
     assert.is_true(vim.wait(5000, function()
       return count_lines(log, 'arc-export:') == 2
         and count_lines(log, 'npm-build:') == 2
-        and require('arcadia-lspconfig.servers.yamake_cache').revision(data_dir)
+        and require('arcadia-lspconfig.servers.yamake_cache').revision(install_dir)
           == string.rep('b', 40)
     end, 20))
   end)

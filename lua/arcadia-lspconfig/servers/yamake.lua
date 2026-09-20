@@ -12,6 +12,7 @@ return function(api)
 
   ---@class ArcadiaYamakeState
   ---@field data_dir string
+  ---@field install_dir string
   ---@field roots table<string, ArcadiaYamakeRootState>
   ---@field running boolean
   ---@field generation integer
@@ -22,9 +23,12 @@ return function(api)
 
   vim.filetype.add { filename = { ['ya.make'] = 'yamake' } }
 
+  local data_dir = api.paths.shared(SERVER)
+
   ---@type ArcadiaYamakeState
   local state = {
-    data_dir = api.paths.shared(SERVER),
+    data_dir = data_dir,
+    install_dir = vim.fs.joinpath(data_dir, SOURCE),
     roots = {},
     running = false,
     generation = 0,
@@ -94,7 +98,7 @@ return function(api)
       return
     end
     api.config.extend(root.lsp_root, SERVER, {
-      cmd = { 'node', api.cache.script_path(state.data_dir), '--stdio' },
+      cmd = { 'node', api.cache.script_path(state.install_dir), '--stdio' },
     })
     root.configured = true
   end
@@ -143,7 +147,7 @@ return function(api)
     state.running = false
     state.job_key = nil
     state.stage = 'error'
-    local usable = api.cache.is_valid(state.data_dir)
+    local usable = api.cache.is_valid(state.install_dir)
     for _, root in pairs(state.roots) do
       api.notify.warn_once(root.lsp_root, SERVER, code, message)
     end
@@ -202,7 +206,7 @@ return function(api)
   ---@param context table
   ---@param revision string
   local function start_build(context, revision)
-    start_job('build', context, { 'npm', 'run', 'build' }, state.data_dir, function()
+    start_job('build', context, { 'npm', 'run', 'build' }, state.install_dir, function()
       local committed, commit_error = api.cache.commit(state.transaction, revision)
       if not committed then
         fail('install_failed', commit_error)
@@ -224,7 +228,7 @@ return function(api)
   ---@param context table
   ---@param revision string
   local function start_npm_install(context, revision)
-    start_job('npm_install', context, { 'npm', 'install' }, state.data_dir, function()
+    start_job('npm_install', context, { 'npm', 'install' }, state.install_dir, function()
       start_build(context, revision)
     end)
   end
@@ -232,7 +236,7 @@ return function(api)
   ---@param context table
   ---@param revision string
   local function start_export(context, revision)
-    local transaction, prepare_error = api.cache.prepare(state.data_dir, state.generation)
+    local transaction, prepare_error = api.cache.prepare(state.install_dir, state.generation)
     if not transaction then
       fail('install_prepare_failed', prepare_error)
       return
@@ -273,14 +277,15 @@ return function(api)
         fail('invalid_revision', 'arc log returned no full ya-make-lsp revision')
         return
       end
-      if api.cache.is_valid(state.data_dir) and api.cache.revision(state.data_dir) == revision then
+      local installed_revision = api.cache.revision(state.install_dir)
+      if api.cache.is_valid(state.install_dir) and installed_revision == revision then
         state.running = false
         state.job_key = nil
         state.stage = 'ready'
         publish { state = 'ready', stage = 'version_check' }
         return
       end
-      state.had_valid_install = api.cache.is_valid(state.data_dir)
+      state.had_valid_install = api.cache.is_valid(state.install_dir)
       start_export(context, revision)
     end)
   end
@@ -298,7 +303,7 @@ return function(api)
     api.status.associate(bufnr, context.arcadia_root, context.lsp_root, SERVER)
     api.clients.detach_wrong_root(bufnr, SERVER, context.lsp_root)
     configure(root)
-    if api.cache.is_valid(state.data_dir) then
+    if api.cache.is_valid(state.install_dir) then
       start_root(root)
     end
     return check(context)
@@ -325,8 +330,8 @@ return function(api)
     if not context then
       return nil, 'current buffer is not an Arcadia ya.make file'
     end
-    if not api.cache.is_valid(state.data_dir) then
-      return nil, ('no valid ya-make-lsp installation is available: %s'):format(state.data_dir)
+    if not api.cache.is_valid(state.install_dir) then
+      return nil, ('no valid ya-make-lsp installation is available: %s'):format(state.install_dir)
     end
     local root = root_state(context)
     root.buffers[bufnr] = true
@@ -348,10 +353,10 @@ return function(api)
       }
     end
     entries[#entries + 1] = {
-      level = api.cache.is_valid(state.data_dir) and 'ok' or 'info',
-      message = api.cache.is_valid(state.data_dir)
-          and ('Installed ya-make-lsp revision: %s'):format(api.cache.revision(state.data_dir))
-        or ('No valid ya-make-lsp installation exists: %s'):format(state.data_dir),
+      level = api.cache.is_valid(state.install_dir) and 'ok' or 'info',
+      message = api.cache.is_valid(state.install_dir)
+          and ('Installed ya-make-lsp revision: %s'):format(api.cache.revision(state.install_dir))
+        or ('No valid ya-make-lsp installation exists: %s'):format(state.install_dir),
     }
     entries[#entries + 1] = {
       level = 'info',
