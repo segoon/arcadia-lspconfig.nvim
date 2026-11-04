@@ -30,6 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: rhysd/action-setup-vim@v1
+        env:
+          # Keep extraction on disk: Ubuntu 26.04 mounts /tmp as tmpfs.
+          # https://github.com/rhysd/action-setup-vim/issues/80
+          TMPDIR: ${{ runner.temp }}
         with:
           version: ${{ matrix.neovim }}
           neovim: true
