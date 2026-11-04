@@ -7,11 +7,16 @@ local Runtime = {}
 ---@field route_commands? boolean
 ---@field auto_enable? boolean
 ---@field config? vim.lsp.Config
----@field create fun(api: table): ArcadiaLspWorkflow
+---@field create? fun(api: table): ArcadiaLspWorkflow
+---@field context? fun(bufnr: integer): table?
+---@field command? fun(lsp_root: string): string[]
+---@field filetype? table
 
 ---@class ArcadiaLspWorkflow
 ---@field context fun(bufnr: integer): table?
----@field activate fun(bufnr: integer, context?: table): boolean?, string?
+---@field root_dir? fun(bufnr: integer, on_dir: fun(root_dir: string))
+---@field cmd? fun(dispatchers: table, config: vim.lsp.ClientConfig): vim.lsp.rpc.PublicClient?
+---@field activate? fun(bufnr: integer, context?: table): boolean?, string?
 ---@field refresh fun(bufnr: integer): boolean?, string?
 ---@field restart fun(bufnr: integer): boolean?, string?
 ---@field health fun(context: table): ArcadiaLspHealthEntry[]
@@ -62,7 +67,8 @@ local function validate_definitions(definitions)
     vim.validate(
       ('server definition %s.create'):format(definition.name),
       definition.create,
-      'function'
+      'function',
+      true
     )
     vim.validate(
       ('server definition %s.route_commands'):format(definition.name),
@@ -82,6 +88,16 @@ local function validate_definitions(definitions)
       'table',
       true
     )
+    if not definition.create then
+      vim.validate('native server context', definition.context, 'function')
+      vim.validate('native server command', definition.command, 'function')
+    elseif definition.context or definition.command then
+      error(
+        'arcadia-lspconfig: server definitions must use either create or context and command',
+        3
+      )
+    end
+    vim.validate('server filetype', definition.filetype, 'table', true)
     if by_name[definition.name] then
       error(('arcadia-lspconfig: duplicate server definition: %s'):format(definition.name), 3)
     end
@@ -220,6 +236,11 @@ function Runtime.new(definitions)
     if definition.config then
       vim.lsp.config(server, definition.config)
     end
+    if not definition.create then
+      vim.lsp.config(server, { cmd = workflow.cmd, root_dir = workflow.root_dir })
+      config.capture(server, vim.lsp.config[server])
+      return
+    end
     local base = vim.lsp.config[server]
     if not base then
       error(('arcadia-lspconfig: no %s LSP configuration is available'):format(server), 3)
@@ -314,7 +335,12 @@ function Runtime.new(definitions)
 
     for _, definition in ipairs(definitions) do
       if options.servers[definition.name] ~= false then
-        local workflow = definition.create(make_api())
+        if definition.filetype then
+          vim.filetype.add(definition.filetype)
+        end
+        local api = make_api()
+        local workflow = definition.create and definition.create(api)
+          or require('arcadia-lspconfig.native').new(definition, api)
         workflows[definition.name] = workflow
         active[#active + 1] = { definition = definition, workflow = workflow }
         install_server(definition, workflow)

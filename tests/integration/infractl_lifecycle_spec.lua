@@ -46,6 +46,30 @@ describe('infractl automatic activation', function()
             return vim.lsp.buf_is_attached(bufnr, id)
           end, 20))
         end
+        for _, restart in ipairs {
+          function()
+            assert.is_true(require('arcadia-lspconfig').refresh(star))
+          end,
+          function()
+            vim.api.nvim_set_current_buf(star)
+            vim.cmd.LspArcadiaRestart()
+          end,
+        } do
+          restart()
+          local previous = id
+          assert.is_true(vim.wait(5000, function()
+            local clients = vim.lsp.get_clients { bufnr = star, name = 'infractl' }
+            if #clients == 1 and clients[1].id ~= previous then
+              id = clients[1].id
+              return true
+            end
+            return false
+          end, 20))
+          for _, bufnr in ipairs(buffers) do
+            assert.is_true(vim.lsp.buf_is_attached(bufnr, id))
+          end
+        end
+        assert.are.equal('ready', require('arcadia-lspconfig').status(star).servers.infractl.state)
         local other = open(root .. '/project/other.yaml')
         local external = open(sandbox .. '/external/main.star')
         vim.wait(100, function()

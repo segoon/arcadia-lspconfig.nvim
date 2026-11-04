@@ -189,6 +189,14 @@ definitions into the server-neutral runtime:
 }
 ```
 
+A server without preparation can omit `create` and instead provide
+`context(bufnr)` and `command(lsp_root)`. Its native configuration supplies
+filetypes and other LSP settings; an optional `filetype` table is registered
+only when the integration is configured. The runtime returns the selected root
+to Neovim for ordinary client startup, and provides shared restart, refresh,
+status, executable validation, and health handling. Infractl uses this path;
+it does not maintain configuration patches or preparation revisions.
+
 The runtime derives option validation, environment checks, installation,
 filetype routing, commands, and health selection from these definitions. It
 does not name or inspect a concrete LSP server. A definition's factory receives

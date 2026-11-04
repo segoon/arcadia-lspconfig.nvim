@@ -1,14 +1,9 @@
 local helpers = require 'tests.helpers'
 
-describe('infractl workflow', function()
+describe('infractl detection', function()
   local root
   local buffers
   local workflow
-  local starts
-  local restarts
-  local executable
-  local warnings
-
   ---@param name string
   ---@return integer
   local function buffer(name)
@@ -20,39 +15,12 @@ describe('infractl workflow', function()
 
   before_each(function()
     root = helpers.tempdir()
-    buffers, starts, restarts, warnings = {}, {}, {}, {}
-    executable = true
+    buffers = {}
     helpers.write(root .. '/.arc/HEAD')
     helpers.write(root .. '/.arcadia.root')
     helpers.write(root .. '/project/a.yaml')
     require('arcadia-lspconfig.root').clear_cache()
-    require('arcadia-lspconfig.config').capture(
-      'infractl',
-      { cmd = { 'ya', 'tool', 'infractl', 'lsp' } }
-    )
-    workflow = require 'arcadia-lspconfig.servers.infractl' {
-      root = require 'arcadia-lspconfig.root',
-      config = require 'arcadia-lspconfig.config',
-      status = require 'arcadia-lspconfig.status',
-      notify = {
-        warn_once = function(...)
-          warnings[#warnings + 1] = { ... }
-        end,
-      },
-      is_executable = function()
-        return executable
-      end,
-      clients = {
-        detach_wrong_root = function() end,
-        start = function(...)
-          starts[#starts + 1] = { ... }
-          return 1
-        end,
-        restart = function(...)
-          restarts[#restarts + 1] = { ... }
-        end,
-      },
-    }
+    workflow = require 'arcadia-lspconfig.servers.infractl'
   end)
 
   after_each(function()
@@ -87,37 +55,10 @@ describe('infractl workflow', function()
     assert.is_nil(workflow.context(buffer 'nested/main.star'))
   end)
 
-  it('configures each root once across activation, restart, and refresh', function()
-    local first = buffer 'project/main.star'
-    local second = buffer 'project/i.yaml'
-    assert.is_true(workflow.activate(first))
-    assert.is_true(workflow.activate(second))
-    assert.is_true(workflow.restart(first))
-    assert.is_true(workflow.refresh(second))
-    assert.are.equal(
-      1,
-      require('arcadia-lspconfig.config').revision(root .. '/project', 'infractl')
+  it('selects checkout-local ya for the native command', function()
+    assert.are.same(
+      { root .. '/ya', 'tool', 'infractl', 'lsp' },
+      workflow.command(root .. '/project')
     )
-    assert.are.equal('idle', require('arcadia-lspconfig.status').get(first).servers.infractl.state)
   end)
-
-  it(
-    'starts immediately with checkout ya, publishes status, and supports restart and refresh',
-    function()
-      local bufnr = buffer 'project/main.star'
-      assert.is_true(workflow.activate(bufnr))
-      assert.are.same({ root .. '/project', 'infractl', { bufnr } }, starts[1])
-      assert.are.same(
-        { root .. '/ya', 'tool', 'infractl', 'lsp' },
-        require('arcadia-lspconfig.config').resolve(root .. '/project', 'infractl').cmd
-      )
-      assert.are.equal(
-        'ready',
-        require('arcadia-lspconfig.status').get(bufnr).servers.infractl.state
-      )
-      assert.is_true(workflow.restart(bufnr))
-      assert.is_true(workflow.refresh(bufnr))
-      assert.are.equal(2, #restarts)
-    end
-  )
 end)
