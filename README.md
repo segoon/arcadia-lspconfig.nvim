@@ -107,7 +107,8 @@ such a marker are skipped. `*.star` files use the `starlark` filetype; YAML
 files keep their normal filetype.
 
 Set `servers.infractl = false` to disable this integration. Refresh and restart
-both restart the client for the current infractl project.
+both restart the client for the current infractl project. A dispatched restart
+reports `idle` rather than claiming the replacement client is already ready.
 
 ## ya.make
 

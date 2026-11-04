@@ -253,6 +253,7 @@ The search stops at the Arcadia root (.arc/HEAD). No ya.make or preparation
 step is required. Files without an applicable marker are skipped. The plugin
 assigns the starlark filetype to *.star; YAML keeps its normal filetype.
 Refresh and restart both restart the current project's infractl client.
+A dispatched restart reports idle instead of claiming the client is ready.
 
                                       *arcadia-lspconfig-yamake*
 YA.MAKE ~

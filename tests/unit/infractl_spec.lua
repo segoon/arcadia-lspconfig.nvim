@@ -82,6 +82,25 @@ describe('infractl workflow', function()
     assert.is_nil(workflow.context(buffer 'project/main.star'))
   end)
 
+  it('does not use a marker above a nested checkout', function()
+    helpers.write(root .. '/nested/.arc/HEAD')
+    assert.is_nil(workflow.context(buffer 'nested/main.star'))
+  end)
+
+  it('configures each root once across activation, restart, and refresh', function()
+    local first = buffer 'project/main.star'
+    local second = buffer 'project/i.yaml'
+    assert.is_true(workflow.activate(first))
+    assert.is_true(workflow.activate(second))
+    assert.is_true(workflow.restart(first))
+    assert.is_true(workflow.refresh(second))
+    assert.are.equal(
+      1,
+      require('arcadia-lspconfig.config').revision(root .. '/project', 'infractl')
+    )
+    assert.are.equal('idle', require('arcadia-lspconfig.status').get(first).servers.infractl.state)
+  end)
+
   it(
     'starts immediately with checkout ya, publishes status, and supports restart and refresh',
     function()

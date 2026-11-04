@@ -22,30 +22,25 @@ return function(api)
     if not roots.arcadia_root then
       return nil
     end
-    local directory = vim.fs.dirname(path)
-    while directory do
-      if
-        vim.uv.fs_stat(directory .. '/a.yaml') or vim.uv.fs_stat(directory .. '/.arcadia.root')
-      then
-        return {
-          bufnr = bufnr,
-          path = path,
-          arcadia_root = roots.arcadia_root,
-          lsp_root = directory,
-        }
-      end
-      if directory == roots.arcadia_root then
-        break
-      end
-      directory = vim.fs.dirname(directory)
+    local marker = vim.fs.find({ 'a.yaml', '.arcadia.root' }, {
+      path = vim.fs.dirname(path),
+      upward = true,
+      stop = vim.fs.dirname(roots.arcadia_root),
+    })[1]
+    if marker then
+      return {
+        bufnr = bufnr,
+        path = path,
+        arcadia_root = roots.arcadia_root,
+        lsp_root = vim.fs.dirname(marker),
+      }
     end
   end
 
   ---@param bufnr integer
   ---@param context? table
-  ---@param restart? boolean
-  ---@return boolean?, string?
-  local function start(bufnr, context, restart)
+  ---@return table?, string?
+  local function configure(bufnr, context)
     context = context or workflow.context(bufnr)
     if not context then
       return nil, 'buffer is not an Arcadia infractl file with an a.yaml or .arcadia.root ancestor'
@@ -58,30 +53,41 @@ return function(api)
       api.notify.warn_once(context.lsp_root, SERVER, 'missing_ya', message)
       return nil, message
     end
-    api.config.extend(context.lsp_root, SERVER, { cmd = { ya, 'tool', 'infractl', 'lsp' } })
-    api.clients.detach_wrong_root(context.bufnr, SERVER, context.lsp_root)
-    if restart then
-      api.clients.restart(context.lsp_root, SERVER, { context.bufnr })
-    elseif not api.clients.start(context.lsp_root, SERVER, { context.bufnr }) then
-      local message = 'infractl failed to start; see :LspLog'
-      api.status.set(context.lsp_root, SERVER, { state = 'error', message = message })
-      return nil, message
+    if api.config.revision(context.lsp_root, SERVER) == 0 then
+      api.config.extend(context.lsp_root, SERVER, { cmd = { ya, 'tool', 'infractl', 'lsp' } })
     end
-    api.status.set(context.lsp_root, SERVER, { state = 'ready' })
-    return true
+    api.clients.detach_wrong_root(context.bufnr, SERVER, context.lsp_root)
+    return context
   end
 
   ---@param bufnr integer
   ---@param context? table
   ---@return boolean?, string?
   function workflow.activate(bufnr, context)
-    return start(bufnr, context)
+    local prepared, err = configure(bufnr, context)
+    if not prepared then
+      return nil, err
+    end
+    local started = api.clients.start(prepared.lsp_root, SERVER, { prepared.bufnr })
+    local message = not started and 'infractl failed to start; see :LspLog' or nil
+    api.status.set(
+      prepared.lsp_root,
+      SERVER,
+      { state = started and 'ready' or 'error', message = message }
+    )
+    return started and true or nil, message
   end
 
   ---@param bufnr integer
   ---@return boolean?, string?
   function workflow.restart(bufnr)
-    return start(bufnr, nil, true)
+    local context, err = configure(bufnr)
+    if not context then
+      return nil, err
+    end
+    api.status.set(context.lsp_root, SERVER, { state = 'idle' })
+    api.clients.restart(context.lsp_root, SERVER, { context.bufnr })
+    return true
   end
 
   workflow.refresh = workflow.restart

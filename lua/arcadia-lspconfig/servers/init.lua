@@ -109,7 +109,7 @@ return {
     auto_enable = true,
     config = {
       cmd = { 'ya', 'tool', 'infractl', 'lsp' },
-      filetypes = { 'starlark', 'bzl', 'yaml' },
+      filetypes = { 'starlark', 'yaml' },
       -- Files without workflow context must not start an ordinary client.
       root_dir = function() end,
       workspace_required = true,
