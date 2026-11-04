@@ -61,6 +61,38 @@ describe('health checks', function()
     assert.is_false(vim.tbl_contains(messages, 'The current buffer is outside Arcadia'))
   end)
 
+  it('uses a workflow root when the project does not contain ya.make', function()
+    local source = root .. '/project/i.yaml'
+    helpers.write(root .. '/.arc/HEAD')
+    helpers.write(root .. '/project/a.yaml')
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    buffers = { bufnr }
+    vim.api.nvim_buf_set_name(bufnr, source)
+    vim.api.nvim_set_current_buf(bufnr)
+    local plugin = require 'arcadia-lspconfig'
+    local original_workflow = plugin._workflow
+    plugin._workflow = function()
+      return {
+        context = function()
+          return { arcadia_root = root, lsp_root = root .. '/project' }
+        end,
+        health = function()
+          return { { level = 'ok', message = 'infractl workflow checked' } }
+        end,
+      }
+    end
+    local ok, err = pcall(require('arcadia-lspconfig.health').check)
+    plugin._workflow = original_workflow
+    assert.is_true(ok, err)
+    assert.is_true(vim.tbl_contains(messages, 'infractl workflow checked'))
+    assert.is_false(
+      vim.tbl_contains(
+        messages,
+        'No ya.make was found between the current file and the Arcadia root'
+      )
+    )
+  end)
+
   it('reports ambiguous enabled integrations', function()
     local source = root .. '/project/main.py'
     helpers.write(root .. '/.arc/HEAD')

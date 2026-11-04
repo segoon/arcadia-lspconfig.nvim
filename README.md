@@ -7,6 +7,7 @@ The plugin supports:
 - C and C++ through `clangd`
 - Python through `pyright` or `basedpyright` (and disables `ty`)
 - Protocol Buffers through `protols`
+- Infrastructure Starlark and YAML files through `infractl`
 - `ya.make` files through the automatically managed `ya-make-lsp`
 
 # Requirements
@@ -41,7 +42,7 @@ vim.lsp.enable('basedpyright')
 vim.lsp.enable('protols')
 ```
 
-`ya-make-lsp` is enabled automatically. Opening an Arcadia `ya.make` file
+`infractl` and `ya-make-lsp` are enabled automatically. Opening an Arcadia `ya.make` file
 installs and starts it; no separate `vim.lsp.enable()` call is needed.
 
 # LSP settings
@@ -96,6 +97,18 @@ explicit tool paths there take precedence over these wrappers.
 The raw build plans and derived index are stored under the checkout-specific
 `stdpath("data")/arcadia-lspconfig/<hash>/protols/` directory.
 
+## infractl
+
+Opening `*.star`, `i.yaml`, or `i.*.yaml` inside Arcadia starts
+`<arcadia-root>/ya tool infractl lsp` automatically. The client root is the
+nearest ancestor containing `a.yaml` or `.arcadia.root`, bounded by the Arcadia
+root (`.arc/HEAD`). No `ya.make` or preparation step is required. Files without
+such a marker are skipped. `*.star` files use the `starlark` filetype; YAML
+files keep their normal filetype.
+
+Set `servers.infractl = false` to disable this integration. Refresh and restart
+both restart the client for the current infractl project.
+
 ## ya.make
 
 Opening a file named exactly `ya.make` sets the `yamake` filetype and enables
@@ -130,6 +143,7 @@ require('arcadia-lspconfig').setup({
     -- use `ty = false` to avoid disabling ty (it doesn't work well with arcadia python)
     ty = {},
     protols = {},
+    infractl = {},
     -- automatically installed and enabled for exact ya.make files
     ['ya-make-lsp'] = {},
   },
@@ -216,7 +230,7 @@ Its event data is deliberately unspecified; consumers should call `status()` or
   server.
 - `:LspArcadiaStatus` displays structured status.
 - `:LspArcadiaRestart` restarts the current root's applicable clangd, Pyright,
-  BasedPyright, Protols, or ya-make-lsp client when its required configuration
+  BasedPyright, Protols, infractl, or ya-make-lsp client when its required configuration
   is available.
 - `:checkhealth arcadia-lspconfig` checks dependencies, roots, Arcadia `ya`,
   server-specific cache state, and the current workflow for the file from which

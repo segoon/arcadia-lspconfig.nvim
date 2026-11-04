@@ -73,13 +73,18 @@ function M.check()
   end
   health.ok(('Arcadia root: %s'):format(roots.arcadia_root))
 
+  local workflow, _, selection_error = plugin._workflow(bufnr)
+  local context = workflow and workflow.context(bufnr)
+  if context then
+    roots.lsp_root = context.lsp_root
+  end
+
   if not roots.lsp_root then
     health.warn 'No ya.make was found between the current file and the Arcadia root'
     return
   end
   health.ok(('LSP root: %s'):format(roots.lsp_root))
 
-  local workflow, _, selection_error = plugin._workflow(bufnr)
   if not workflow then
     if selection_error then
       health.error(selection_error)
@@ -88,7 +93,6 @@ function M.check()
     end
     return
   end
-  local context = workflow.context(bufnr)
   if not context then
     health.info 'The applicable Arcadia LSP workflow has no context for the current buffer'
     return

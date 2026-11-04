@@ -134,6 +134,8 @@ if sys.argv[1:2] == ["make"]:
     sys.exit(make())
 if sys.argv[1:3] == ["ide", "vscode"]:
     sys.exit(ide_vscode())
+if sys.argv[1:] == ["tool", "infractl", "lsp"]:
+    sys.exit(run_lsp("infractl"))
 if sys.argv[1:3] == ["tool", "clangd"]:
     sys.exit(run_lsp("clangd"))
 if sys.argv[1:3] == ['tool', 'clang-format']:

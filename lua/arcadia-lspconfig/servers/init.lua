@@ -61,6 +61,14 @@ local function create_yamake(api)
   return require 'arcadia-lspconfig.servers.yamake'(dependencies)
 end
 
+---@param api table
+---@return ArcadiaLspWorkflow
+local function create_infractl(api)
+  return require 'arcadia-lspconfig.servers.infractl'(vim.tbl_extend('force', {}, api, {
+    is_executable = is_executable,
+  }))
+end
+
 ---@type ArcadiaLspServerDefinition[]
 return {
   {
@@ -93,6 +101,20 @@ return {
     default_options = {},
     allowed_options = {},
     create = create_protols,
+  },
+  {
+    name = 'infractl',
+    default_options = {},
+    allowed_options = {},
+    auto_enable = true,
+    config = {
+      cmd = { 'ya', 'tool', 'infractl', 'lsp' },
+      filetypes = { 'starlark', 'bzl', 'yaml' },
+      -- Files without workflow context must not start an ordinary client.
+      root_dir = function() end,
+      workspace_required = true,
+    },
+    create = create_infractl,
   },
   {
     name = 'ya-make-lsp',
