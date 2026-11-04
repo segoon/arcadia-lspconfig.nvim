@@ -16,14 +16,14 @@ INTRODUCTION                                     *arcadia-lspconfig.nvim*
 
 arcadia-lspconfig.nvim extends native Neovim LSP configurations for Arcadia
 tier0 development. The current release supports clangd, Pyright,
-BasedPyright, Protols, and ya-make-lsp.
+BasedPyright, Protols, infractl, and ya-make-lsp.
 It suppresses ty inside Arcadia to prevent a globally enabled ty
 server from competing with the Arcadia Python server. Go and other language
 modules are planned.
 
-The plugin configures clangd, Pyright, BasedPyright, ty, Protols, and
+The plugin configures clangd, Pyright, BasedPyright, ty, Protols, infractl, and
 ya-make-lsp during setup. The user explicitly enables clangd, the Python
-servers, and Protols with |vim.lsp.enable()|. ya-make-lsp is enabled
+servers, and Protols with |vim.lsp.enable()|. infractl and ya-make-lsp are enabled
 automatically.
 
 ==============================================================================
@@ -61,6 +61,7 @@ Default options: >lua
       basedpyright = { codegen = true },
       ty = {},
       protols = {},
+      infractl = {},
       ['ya-make-lsp'] = {},
     },
     jobs = {
@@ -102,6 +103,12 @@ rather than selecting one silently.
 servers.protols ~
     Set to false to disable this plugin's Protols integration. Protols has no
     nested plugin options. A project-owned protols.toml remains authoritative.
+
+                              *arcadia-lspconfig-servers-infractl*
+servers.infractl ~
+    Automatically enabled for *.star, i.yaml, and i.*.yaml inside Arcadia.
+    Set to false to disable filetype detection and LSP activation.
+    There are no nested plugin options.
 
                               *arcadia-lspconfig-servers-yamake*
 servers["ya-make-lsp"] ~
@@ -234,6 +241,21 @@ directory: >
 Explicit config.path.clang_format or config.path.protoc values in a project
 protols.toml take precedence over the wrappers.
 
+                                      *arcadia-lspconfig-infractl*
+INFRACTL ~
+
+Opening *.star, i.yaml, or i.*.yaml inside Arcadia automatically starts: >
+
+  {arcadia-root}/ya tool infractl lsp
+<
+The client root is the nearest ancestor containing a.yaml or .arcadia.root.
+The search stops at the Arcadia root (.arc/HEAD). No ya.make or preparation
+step is required. Files without an applicable marker are skipped. The plugin
+assigns the starlark filetype to *.star; YAML keeps its normal filetype.
+Refresh and restart both restart the current project's infractl client.
+A dispatched restart reports idle until the replacement process starts.
+Neovim handles normal startup without a custom preparation workflow.
+
                                       *arcadia-lspconfig-yamake*
 YA.MAKE ~
 
@@ -292,7 +314,7 @@ COMMANDS                                        *arcadia-lspconfig-commands*
 
                                               *:LspArcadiaRestart*
 :LspArcadiaRestart
-    Restart the applicable clangd, Pyright, BasedPyright, Protols, or
+    Restart the applicable clangd, Pyright, BasedPyright, Protols, infractl, or
     ya-make-lsp client for the current buffer's Arcadia LSP root. Refuse when
     its required configuration is unavailable.
 ==============================================================================

@@ -11,11 +11,12 @@ The target language set is:
 - `pyright` or `basedpyright` for Python
 - suppression of `ty` inside Arcadia
 - `protols` for Protocol Buffers
+- `infractl` for infrastructure Starlark and YAML
 - `gopls` for Go
 - (probably something else soon)
 
 The implemented built-in workflows are `clangd`, `pyright`, `basedpyright`, and
-`protols`, plus an Arcadia-only suppression policy for `ty` and an automatically
+`protols`, and `infractl`, plus an Arcadia-only suppression policy for `ty` and an automatically
 managed `ya-make-lsp` workflow. The two configured Python servers share one
 workflow implementation. Other server modules remain planned work.
 
@@ -127,6 +128,12 @@ must not continue above the Arcadia root.
 If a file is under an Arcadia root but no applicable `ya.make` is found, the
 plugin performs no Arcadia-specific work for that file.
 
+Infractl instead uses the nearest `a.yaml` or `.arcadia.root` ancestor,
+bounded by the Arcadia root, and does not require `ya.make`. It automatically
+starts checkout-local `ya tool infractl lsp` for `*.star`, `i.yaml`, and
+`i.*.yaml`, without preparation. Like `ya-make-lsp`, it is enabled automatically;
+`servers.infractl = false` disables the integration.
+
 ### 6.3 Path handling and caching
 
 - Root detection uses the buffer's visible path and does not resolve symlinks.
@@ -181,6 +188,14 @@ definitions into the server-neutral runtime:
   end,
 }
 ```
+
+A server without preparation can omit `create` and instead provide
+`context(bufnr)` and `command(lsp_root)`. Its native configuration supplies
+filetypes and other LSP settings; an optional `filetype` table is registered
+only when the integration is configured. The runtime returns the selected root
+to Neovim for ordinary client startup, and provides shared restart, refresh,
+status, executable validation, and health handling. Infractl uses this path;
+it does not maintain configuration patches or preparation revisions.
 
 The runtime derives option validation, environment checks, installation,
 filetype routing, commands, and health selection from these definitions. It
@@ -471,6 +486,7 @@ require("arcadia-lspconfig").setup({
     basedpyright = { codegen = true },
     ty = {},
     protols = {},
+    infractl = {},
     ["ya-make-lsp"] = {},
   },
   jobs = {

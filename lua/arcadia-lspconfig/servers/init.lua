@@ -94,6 +94,7 @@ return {
     allowed_options = {},
     create = create_protols,
   },
+  require 'arcadia-lspconfig.servers.infractl',
   {
     name = 'ya-make-lsp',
     default_options = {},
